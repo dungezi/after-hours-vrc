@@ -1,0 +1,9 @@
+{
+  "name": "sugar-after-hours",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "夜航 · VRChat 主题原创关系与生活模拟器",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node launcher.mjs", "serve": "node server.mjs", "test": "node tests/run.mjs", "check:publish": "node scripts/check-publication.mjs" }
+}
