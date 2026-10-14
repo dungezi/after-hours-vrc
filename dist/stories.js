@@ -4,6 +4,7 @@ import { courtshipScene } from './courtship-stories.js';
 import { DAILY, dailyScene } from './daily-stories.js';
 import { initiativeScene } from './initiative-stories.js';
 import { PHOTO_STORIES, photoScene } from './photo-stories.js';
+import { SEPARATION_IDS, separationScene } from './separation-stories.js';
 
 const person = id => PEOPLE.find(p => p.id === id);
 const c = (label, text, effects = {}, rel = {}, extra = {}) => ({ label, text, effects, rel, flags: {}, ...extra });
@@ -57,8 +58,9 @@ const CONFESS = {
   yuki: '弥生保存了工程，第一次没有用“还有一个报错”拖延谈话。“如果你说的是喜欢，我希望你看见的不只有这副模型，也有不知道该怎么回应的我。”',
 };
 
-export const SCENE_IDS = ['initiative','courtship','npc-prelude','introduction','conversation','date','solo','confession','reply','boundary','breakup','together','npc-confession','npc-boundaries','npc-network','npc-calendar','npc-date','npc-breakup','npc-departure','multi-open','multi-discovery','multi-time','multi-photo', ...GROUPS.map(g => g.id), ...DAILY.map(s=>s.id), ...PHOTO_STORIES.map(s=>s.id)];
+export const SCENE_IDS = ['initiative','courtship','npc-prelude','introduction','conversation','date','solo','confession','reply','boundary','breakup','together','npc-confession','npc-boundaries','npc-network','npc-calendar','npc-date','npc-breakup','npc-departure','multi-open','multi-discovery','multi-time','multi-photo', ...GROUPS.map(g => g.id), ...DAILY.map(s=>s.id), ...PHOTO_STORIES.map(s=>s.id), ...SEPARATION_IDS];
 export function sceneFor(run, pending) {
+  if(SEPARATION_IDS.includes(pending.id))return separationScene(run,pending);
   if(pending.id.startsWith('photo-'))return photoScene(run,pending);
   if(pending.id==='initiative')return initiativeScene(run,pending);
   if(pending.id.startsWith('daily-'))return dailyScene(run,pending);
@@ -104,12 +106,11 @@ export function sceneFor(run, pending) {
     return { npc: p.id, title: accepted?`${name}愿意回应你的心意`:pending.answer==='rejected'?`${name}选择了朋友关系`:`${name}还想再了解一些`, subtitle: '心意的回应 · 请认真读完', text: `${accepted?lines[p.id]:pending.answer==='rejected'?(p.id==='ash'?lines.ash:`${name}坦诚地说，自己暂时不想建立这段关系。“你可以难过，也可以选择保持一点距离。请不要把我的答案当成一道需要攻克的题。”`):`${name}记得你的告白，但仍想确认相处期待与生活安排。TA 没有给一个固定的等待天数，而是希望通过之后的谈话、共同经历和边界沟通慢慢作答。`}${accepted&&!r.intent?.disclosed?'\n\n已有关系尚未被告知。这个缺口会在之后的共同经历中出现。':''}`, choices: [c(accepted?'我也愿意，确认我们现在的关系':pending.answer==='rejected'?'尊重答案，允许彼此保持合适的距离':'接受等待，继续了解彼此', accepted?'你们共同确认砂糖关系。名字是新的，生活与边界仍然需要一起照顾。':'心意有了明确的回应，不必靠刷新好友列表猜测。', accepted?{ mood: 4 }:{ balance: 2 }, accepted?{ trust: 4, affection: 5, tension: -3 }:{ trust: 2, tension: -2 }, { outcome: `reply-${pending.answer}` }), c(accepted?'坦诚说还需要考虑，先保持朋友':'先退一步，把今晚留给自己', '你没有勉强自己，也没有替对方决定。关系暂停在双方都能接受的位置。', { balance: 4 }, { tension: -3 }, { outcome: 'reply-withdraw' })] };
   }
   if (pending.id === 'boundary') return { npc:p.id, title:'把期待放在桌面上', subtitle:`关系对话 · ${name}`, text:`${name}问起上线时间、独处需求和关系是否需要排他。“知道你喜欢我很重要，知道你能承诺什么也很重要。”你们决定把模糊的期待讲得具体一些。`, choices:[c('说清现实安排，也询问对方的独处需要','你们写下能做到的相处方式，允许忙碌时提前留言。',{balance:3},{trust:4,tension:-8},{flag:'clear-boundaries'}),c('讨论是否接受彼此有其他亲密关系',FLEXIBLE.includes(p.id)?`${name}愿意讨论知情的开放关系，但不接受隐瞒和单方面安排。`:`${name}希望自己的砂糖关系是排他的。你听见了这个愿望，没有把不同期待说成对错。`,{}, {trust:3,tension:-4},{outcome:'discuss-open'}),c('先答应所有要求，以后再说','你们暂时结束讨论，却留下了兑现承诺的压力。',{balance:-4},{affection:2,tension:7})] };
-  if (pending.id === 'breakup') return { npc:p.id,title:`和${name}认真说再见`,subtitle:'关系告别 · 由你确认',text:`你们找了一处安静的位置。${name}问：“你是想改变相处方式，还是结束砂糖关系？”过去的故事不会因为答案被删除，但接下来的路可以重新选择。`,choices:[c('结束砂糖关系，尊重地告别','你们确认关系结束，保留隐私和已经发生的故事。',{balance:4},{trust:2,tension:-15,affection:-8},{outcome:'breakup-confirm'}),c('先保持关系，重新商量安排','这次谈话让你们发现需要改变的部分。结束不是唯一选项，但改变需要行动。',{}, {trust:3,tension:-8})] };
   if (pending.id.startsWith('multi-')) {
     const bothFlexible = FLEXIBLE.includes(p.id) && FLEXIBLE.includes(other?.id);
     const discovery = pending.id === 'multi-discovery', scheduling = pending.id === 'multi-time', photo = pending.id === 'multi-photo';
     const text = discovery?`小满分享的一张照片让${partner}发现，你与${name}也称作砂糖。${name}第一次听到已有关系的完整情况。两个人都没有立即问你“选谁”，双方先问：“为什么我们不是从你口中知道的？”`:scheduling?`${name}和${partner}同时发来邀请。先前说清的开放关系，并没有让时间变成两份。你看到两个人开始互相猜测，自己是不是总被安排到“改天”。`:photo?`拍合照时，${partner}问要不要写关系的名字，${name}却希望先保持私密。双方看向彼此，发现接受多段关系，也不等于对公开范围有同一个答案。`:`${name}和${partner}第一次坐下来聊到你。两个人不只是在等你的安排，双方也有自己的愿望。${bothFlexible?'双方愿意讨论彼此知情的开放关系，但希望拥有明确的知情权、独处时间和退出权。':`${FLEXIBLE.includes(p.id)?partner:name}坦诚表示自己期待排他的砂糖关系；这不是一句“大家都别介意”就能解决的差异。`}`;
-    return { npc:p.id,other:other.id,title:discovery?'没有说出的另一段关系':scheduling?'一个晚上，几份邀请':photo?'合照的标题由谁决定':'不止两个人的约定',subtitle:`关系交织 · ${name} × ${partner}`,text,choices:[c(scheduling?'把时间讲清楚，不用空泛的“改天”':photo?'分别确认公开范围，允许不出镜':'让每个人说清期待，接受各自的选择',bothFlexible?'你们分别确认知情、非排他与退出权。没有人被要求证明大度，约定从现在开始需要兑现。':`${FLEXIBLE.includes(p.id)?partner:name}选择退回朋友关系。你接受这个决定；亲密可以有多种形式，也不能替别人同意。`,{balance:3},{trust:4,tension:-8},{otherRel:{trust:4,tension:-8},outcome:'multi-consent'}),c('回避讨论，说喜欢就不必计较','谁都没有得到自己想知道的安排。双方开始直接互相联系，信任留下新的裂口。',{balance:-5},{trust:-6,tension:14},{otherRel:{trust:-6,tension:14},outcome:'multi-dodge'}),c(`先结束与${name}的新关系，认真道歉`,'你承认现在无法承担这些承诺，结束新关系，并让已有关系决定是否继续。',{balance:3},{trust:1,tension:-8},{otherRel:{trust:3,tension:-5},outcome:'multi-withdraw'})] };
+    return { npc:p.id,other:other.id,title:discovery?'没有说出的另一段关系':scheduling?'一个晚上，几份邀请':photo?'合照的标题由谁决定':'不止两个人的约定',subtitle:`关系交织 · ${name} × ${partner}`,text,choices:[c(scheduling?'把时间讲清楚，不用空泛的“改天”':photo?'分别确认公开范围，允许不出镜':'让每个人说清期待，接受各自的选择',bothFlexible?'你们分别确认知情、非排他与退出权。没有人被要求证明大度，约定从现在开始需要兑现。':`${FLEXIBLE.includes(p.id)?partner:name}希望重新考虑砂糖约定。你听见这个愿望，后续会先展开关系谈话，不在这一个选项里直接宣布分开。`,{balance:3},{trust:4,tension:-8},{otherRel:{trust:4,tension:-8},outcome:'multi-consent'}),c('回避讨论，说喜欢就不必计较','谁都没有得到自己想知道的安排。双方开始直接互相联系，信任留下新的裂口。',{balance:-5},{trust:-6,tension:14},{otherRel:{trust:-6,tension:14},outcome:'multi-dodge'}),c(`先讨论与${name}的新关系是否继续`,'你承认现在无法承担这些承诺，提出重新考虑新关系；先经历关系变化的前置谈话，再听当事人的完整回应。',{balance:3},{trust:1,tension:-8},{otherRel:{trust:3,tension:-5},outcome:'multi-withdraw'})] };
   }
   return null;
 }

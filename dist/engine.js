@@ -6,8 +6,9 @@ import { romanceKey, preludeKey, romanceProgress, preludeProgress, narratorFor }
 import { DAILY, dailyReady } from './daily-stories.js';
 import { INITIATIVE } from './initiative-stories.js';
 import { PHOTO_STORIES, selectPhotoStory, validPhotoPending, photoFallback, photoModeFor } from './photo-stories.js';
+import { SEPARATION_IDS, departureKey, beginDeparture, departurePending, separationMatches, separationReady, advanceDeparture, validateDepartures, departureContactReason } from './separation-stories.js';
 
-export const VERSION = 7;
+export const VERSION = 8;
 export const DAYS = 28;
 export const STAT_NAMES = { energy: '精力', mood: '心情', craft: '制作', social: '社交', balance: '现实平衡', money: '资金' };
 export const REL_NAMES = { affection: '亲密', trust: '信任', tension: '压力' };
@@ -64,7 +65,7 @@ export function startRun({ name = '旅人', traits = ['listener', 'wanderer'], d
     name: String(name).trim().slice(0, 20) || '旅人', traits: [...traits], device, memories: carried, seed: Number(seed) >>> 0,
     day: 1, ap: 3, stats, world: 'rain', visited: [], gear: [], projects: { avatar: 0, world: 0, event: 0 },
     relationships: Object.fromEntries(PEOPLE.map(p => [p.id, { met: ['raina', 'ash'].includes(p.id), introduced:false, affection: 5, trust: 10, tension: 0, stage: 0, status: 'friend', meetings: 0, lastDay: 0, confessionDay: 0, communicated: false, drifted: false, intent: null, disclosed: true, agreement: false }])),
-    seen: [], achievements: [], photos: [], logs: [], pending: null, eventDay: 0, photoDay: 0, ended: false, ending: null,
+    seen: [], achievements: [], photos: [], departures: {}, logs: [], pending: null, eventDay: 0, photoDay: 0, ended: false, ending: null,
     storySeen: [], storyFlags: {}, npcLinks: {}, npcBonds: {}, queue: [], notice: null, nightActions: 0, storyCount: 0, storyNight: 0,
     counters: { boundary: 0, actions: 0, gossip: false, friendship: false, dates: 0 }, dream: 'belong',
   };
@@ -116,11 +117,13 @@ export function actionReason(run, type, target) {
     if(ids.length!==2 || ids[0]===ids[1] || !ids.every(id=>byId(PEOPLE,id)))return '请选择两位不同的朋友';
     if(!ids.every(id=>isIntroduced(run,id)))return '先读完两位朋友的初次相遇';
     if(!ids.every(id=>online(run,id)))return '需要两位朋友今晚都在线';
+    if(ids.some(id=>departureContactReason(run,id)))return '有人已提出暂时不联系，先尊重告别后的距离';
   }
   if (type === 'explore' && !byId(WORLD, target)) return '世界不存在';
   if (['talk', 'date', 'boundary', 'confess', 'breakup'].includes(type)) {
     const npc = byId(PEOPLE, target), r = run.relationships[target];
     if (!npc || !r?.met) return '先在世界中认识这位朋友';
+    if(departureContactReason(run,target))return departureContactReason(run,target);
     if (!online(run, target)) return 'TA 今晚离线，换一天再约';
     if (type === 'date' && r.trust < 20) return '先聊聊，建立至少 20 点信任';
     if (type === 'confess') {
@@ -133,12 +136,14 @@ export function actionReason(run, type, target) {
       if (r.affection < 30 || r.trust < 30 || r.meetings < 4) return '先积累亲密 30、信任 30，并相处 4 次，再认真表达心意';
     }
     if (type === 'breakup' && r.status !== 'sugar') return '只有砂糖关系可以进行关系告别';
+    if(type==='breakup' && run.departures[departureKey(target)]?.resolution==='active')return '关系谈话正在推进，下一段会在另一个夜晚继续';
   }
   if (type === 'photo') {
     if(run.photoDay === run.day)return '今晚已经拍过照片了';
     if(target) {
       if(!byId(PEOPLE,target))return '这位拍照同伴不存在';
       if(!isIntroduced(run,target))return '先读完这位朋友的初次相遇';
+      if(departureContactReason(run,target))return departureContactReason(run,target);
       if(!online(run,target))return 'TA 今晚离线，换一天再合照';
       if(locationOf(run,target)!==run.world)return 'TA 不在当前世界，请先跃迁到 TA 所在的世界';
     }
@@ -175,11 +180,14 @@ export function currentEvent(run) {
 const pairKey = (a,b) => [a,b].sort().join(':');
 const photoReady=(run,q)=>validPhotoPending(run,q) && (!q.npc || (online(run,q.npc) && locationOf(run,q.npc)===run.world));
 function storyReady(run, q) {
-  if(q.type==='arc')return isIntroduced(run,q.npc) && run.relationships[q.npc].stage===q.index && (q.index===0 || run.day>=(run.storyFlags[`read:arc:${q.npc}:0`] || 1)+2);
+  if(q.type==='arc')return isIntroduced(run,q.npc) && !departureContactReason(run,q.npc) && run.relationships[q.npc].stage===q.index && (q.index===0 || run.day>=(run.storyFlags[`read:arc:${q.npc}:0`] || 1)+2);
   if(q.type==='event') {const e=byId(EVENTS,q.id);return !!e && (!e.npc || isIntroduced(run,e.npc)) && eventReady(run,e);}
   const group=q.type==='scene' && GROUPS.find(g=>g.id===q.id);
   const cast=group ? groupCast(group) : q.type==='scene' && (q.id==='courtship' || q.id==='together' || q.id.startsWith('npc-') || q.id.startsWith('multi-')) ? [q.npc,q.other].filter(Boolean) : [];
   if(q.type==='scene') {
+    if(SEPARATION_IDS.includes(q.id))return separationReady(run,q);
+    if((group?groupCast(group):[q.npc,q.other].filter(Boolean)).some(id=>departureContactReason(run,id)))return false;
+    if(['breakup','npc-breakup','npc-departure'].includes(q.id))return false;
     if(q.id.startsWith('photo-') && !photoReady(run,q))return false;
     if(q.id.startsWith('daily-')) {
       const s=DAILY.find(s=>s.id===q.id);
@@ -205,8 +213,11 @@ function pump(run) {
   // 所有初次相遇先读；延后群像时保留队列，不能把待认识误当作已认识。
   const intro=run.queue.findIndex(q=>q.type==='scene' && q.id==='introduction' && (q.dueDay || 0)<=run.day);
   if (intro>=0) { run.pending=run.queue.splice(intro,1)[0];return; }
+  const separation=run.queue.findIndex(q=>SEPARATION_IDS.includes(q.id) && (q.dueDay || 0)<=run.day && separationReady(run,q));
+  if(separation>=0) {run.pending=run.queue.splice(separation,1)[0];return;}
   for (let i=0;i<run.queue.length;i++) {
     const q=run.queue[i];
+    if(SEPARATION_IDS.includes(q.id) && !separationMatches(run,q)) {run.queue.splice(i--,1);continue;}
     if ((q.dueDay || 0)>run.day) continue;
     if(q.id?.startsWith('group-') && run.storySeen.includes(q.id)) {run.queue.splice(i--,1);continue;}
     if((q.type==='arc' && run.relationships[q.npc].stage>q.index) || (q.type==='event' && run.seen.includes(q.id))) {run.queue.splice(i--,1);continue;}
@@ -271,10 +282,7 @@ function scheduleNpcStories(run,witness) {
   for(const p of PEOPLE) {
     const r=run.relationships[p.id], away=run.day-r.lastDay;
     if(r.status==='sugar' && isIntroduced(run,p.id) && (r.tension>=75 || (away>=6 && r.trust<30))) {
-      const scene={type:'scene',id:'npc-departure',npc:p.id};
-      enqueue(run,scene);
-      const index=run.queue.findIndex(q=>q.id===scene.id && q.npc===p.id);
-      if(index>0)run.queue.unshift(run.queue.splice(index,1)[0]);
+      beginDeparture(run,p.id,null,p.id,r.tension>=75?'pressure':'absence');
     }
   }
   for(const route of NPC_ROUTES) {
@@ -289,9 +297,16 @@ function scheduleNpcStories(run,witness) {
         enqueue(run,{type:'scene',id:'npc-prelude',npc:a,other:b,index:progress,...(reported?{narrator}:{})});
       } else if((run.npcLinks[key] || 0)>=8 && (run.storyFlags['npc-ask:'+key] || 0)<2)enqueue(run,{type:'scene',id:'npc-confession',npc:a,other:b});
     } else if(bond?.status==='sugar') {
-      if(bond.tension>=35 || bond.trust<=30 || (bond.stage===2 && bond.outlook==='change' && run.day>=bond.sinceDay+7))enqueue(run,{type:'scene',id:'npc-breakup',npc:a,other:b});
-      else if(bond.stage===1 && run.day>=bond.sinceDay+3)enqueue(run,{type:'scene',id:'npc-date',npc:a,other:b});
+      const life=bond.stage===2 && bond.outlook==='change' && run.day>=bond.sinceDay+7;
+      if(bond.tension>=35 || bond.trust<=30 || life) {
+        const initiator=life?a:(run.day+PEOPLE.findIndex(p=>p.id===a))%2?a:b;
+        beginDeparture(run,a,b,initiator,life?'life':'pressure');
+      }
+      else if(bond.stage===1 && run.day>=bond.sinceDay+3 && !['active','ended'].includes(run.departures[departureKey(a,b)]?.resolution))enqueue(run,{type:'scene',id:'npc-date',npc:a,other:b});
     }
+  }
+  for(const d of Object.values(run.departures)) {
+    const q=departurePending(d);if(q && separationReady(run,q))enqueue(run,q);
   }
 }
 function resolveNpcBond(run,p) {
@@ -328,7 +343,7 @@ function trigger(run, npc, mode='explore') {
       run.pending={type:'arc',npc,index:r.stage}; run.eventDay=run.day; return;
     }
   }
-  const group=GROUPS.find(g=>groupReady(run,g) && !run.storySeen.includes(g.id) && groupCast(g).every(id=>isIntroduced(run,id)) && g.cast.every(id=>online(run,id)));
+  const group=GROUPS.find(g=>groupReady(run,g) && !run.storySeen.includes(g.id) && groupCast(g).every(id=>isIntroduced(run,id) && !departureContactReason(run,id)) && g.cast.every(id=>online(run,id)));
   if (group && run.storyFlags.lastGroupDay!==run.day) { run.pending={type:'scene',id:group.id,npc:group.cast[0],other:group.cast[1]}; return; }
   if (['talk','date'].includes(mode) && npc) {
     const index=[0,1].find(i=>!run.storyFlags[`read:conversation:${npc}:${i}`] && conversationCast(npc,i).every(id=>isIntroduced(run,id)) && (i===0 || run.storyFlags[`read:conversation:${npc}:0`]) && (i===0 || run.day>=run.storyFlags[`read:conversation:${npc}:0`]+2));
@@ -346,6 +361,7 @@ function trigger(run, npc, mode='explore') {
   }
 }
 function eventReady(run,e) {
+  if(e.npc && departureContactReason(run,e.npc))return false;
   if(e.id==='rumor')return run.photos.some(p=>p.with && run.relationships[p.with].introduced && run.relationships[p.with].status==='friend');
   if(e.id==='feedback')return run.photos.length>0;
   if(e.id==='party')return Object.values(run.relationships).filter(r=>r.introduced).length>=3;
@@ -398,7 +414,7 @@ export function perform(run, type, target) {
     const isNew = !run.visited.includes(target);
     if (isNew) run.visited.push(target);
     effects = { ...effects, mood: w.mood + (has(run, 'map') ? 1 : 0) + (isNew && has(run, 'wanderer') ? 2 : 0), social: w.social + (target === 'club' && has(run, 'tracker') ? 2 : 0), craft: w.craft };
-    const candidates = peopleAt(run, target).map(p=>p.id);
+    const candidates = peopleAt(run, target).map(p=>p.id).filter(id=>!departureContactReason(run,id));
     npc = candidates.find(id => !run.relationships[id].met) || candidates[Math.floor(random(run) * candidates.length)];
     title = `${staying ? '继续探索' : '跃迁'} · ${w.name}`;
     text = `${w.desc} ${candidates.length ? '' : '今晚这里没有熟悉的朋友；你把风景留给了自己。'}`;
@@ -464,8 +480,8 @@ export function perform(run, type, target) {
     }
     if (type === 'boundary') run.pending={type:'scene',id:'boundary',npc};
     if (type === 'breakup') {
-      title=`关系谈话 · ${p.name}`;text='你们决定先把想改变的事情说完整，再确认是否结束关系。';
-      run.pending={type:'scene',id:'breakup',npc};
+      title=`关系谈话 · ${p.name}`;text='你提出重新考虑砂糖约定，先经历两段跨夜前置谈话，再由当事人表达是否分开。';
+      run.pending=departurePending(beginDeparture(run,npc,null,'player','request'));
     }
   } else if (type === 'photo') {
     run.photoDay = run.day;
@@ -547,6 +563,7 @@ export function choose(run, index) {
     if(p.id.startsWith('group-'))run.storyFlags['read:'+p.id]=run.day;
   }
   const outcome=c.outcome || '';
+  if(outcome.startsWith('departure-'))run.notice=advanceDeparture(run,p,c);
   if(outcome==='photo-read') {
     const shot=run.photos[p.photoIndex];
     shot.with=c.photoMode==='scenery'?null:p.npc || null;
@@ -588,11 +605,6 @@ export function choose(run, index) {
     run.notice={title:titles[answer],text:resultText,npc:p.npc,answer,day:run.day};
   }
   if (outcome==='discuss-open') rel.agreement=FLEXIBLE.includes(p.npc);
-  if (outcome==='breakup-confirm') { rel.status='salt';rel.intent=null; }
-  if (outcome==='npc-departure') {
-    rel.status='salt';rel.intent=null;rel.agreement=false;rel.drifted=true;
-    run.notice={title:`${byId(PEOPLE,p.npc).name}提出的告别已确认`,text:resultText,npc:p.npc,answer:'ended',day:run.day};
-  }
   if(outcome==='together-connect')run.storyFlags['together:'+pairKey(p.npc,p.other)]=true;
   if (outcome.startsWith('npc-bond-')) {
     const key=pairKey(p.npc,p.other),names=[p.npc,p.other].map(id=>byId(PEOPLE,id).name).join('与');
@@ -614,17 +626,15 @@ export function choose(run, index) {
     } else if(outcome==='npc-bond-decline') {bond.stage=3;bond.lastDay=run.day;}
     else if(outcome==='npc-bond-date') {
       bond.stage=2;bond.lastDay=run.day;
-    } else if(outcome==='npc-bond-end') {
-      bond.status='salt';bond.stage=3;bond.lastDay=run.day;bond.initiator=p.npc;
-      run.notice={title:`${names}的砂糖关系已结束`,text:`${byId(PEOPLE,p.npc).name}主动提出告别。${resultText}`,npc:p.npc,other:p.other,answer:'npc-ended',day:run.day};
+
     }
   }
   if (outcome.startsWith('multi-')) {
     const other=run.relationships[p.other], key=pairKey(p.npc,p.other);
     if (outcome==='multi-consent') {
-      for (const id of [p.npc,p.other]) { const r=run.relationships[id];r.disclosed=true;r.agreement=FLEXIBLE.includes(id);if(!r.agreement)r.status='friend'; }
+      for (const id of [p.npc,p.other]) { const r=run.relationships[id];r.disclosed=true;r.agreement=FLEXIBLE.includes(id);if(!r.agreement && r.status==='sugar')beginDeparture(run,id,null,id,'boundaries'); }
       run.storyFlags['consent:'+key]=true;
-    } else if (outcome==='multi-withdraw') { rel.status='salt';rel.intent=null; }
+    } else if (outcome==='multi-withdraw') { beginDeparture(run,p.npc,null,'player','request'); }
     else { changes.push(...apply(run,{},p.other,{trust:-4,tension:6}));run.storyFlags['consent:'+key]=false; }
     if (p.id==='multi-discovery') changes.push(...apply(run,{},p.other,{trust:-8,tension:8}));
     if (rel.status==='sugar' && other.status==='sugar' && ['multi-open','multi-discovery'].includes(p.id)) enqueue(run,{type:'scene',id:'multi-time',npc:p.npc,other:p.other,dueDay:Math.min(DAYS,run.day+3)});
@@ -672,6 +682,7 @@ export function finish(run) {
   const close = PEOPLE.filter(p => run.relationships[p.id].met && run.relationships[p.id].trust >= 50);
   let ending;
   if (run.stats.balance < 30) ending = { id: 'burnout', name: '先回到自己身边', subtitle: '有些灯，要先为自己点亮。', text: '你收获了不少夜晚，却也让现实的睡眠与生活落在身后。这不是失败，只是一段旅程提醒你：下次回来时，把自己也放进安排里。' };
+  else if(Object.values(run.departures).some(d=>!d.other && d.resolution==='active'))ending={id:'fragile',name:'仍在练习的拥抱',subtitle:'关于是否继续，还有需要说完的话。',text:'关系变化已经被看见，但告别的前置或重新讨论还没走完。旅程结束不会替当事人宣布分开，也不会把未完成的调整说成已经解决。共同经历与目前的决定仍留在记录里。'};
   else if (partners.length>=2 && partners.every(p=>run.relationships[p.id].agreement && run.relationships[p.id].trust>=50 && run.relationships[p.id].tension<=35) && run.stats.balance>=45) ending={id:'weave',name:'几条轨道，一起发光',subtitle:partners.map(p=>p.name).join('、')+'与你，共同确认各自的位置。',text:'你们没有让任何人替别人同意。公开范围、见面安排和退出权都被认真讨论，关系交织成为一份不断修订的约定。多段亲密没有复制时间，却让你们更清楚怎样共同承担承诺。'};
   else if (partners.length>=2) ending={id:'fragile',name:'仍在练习的拥抱',subtitle:'几份喜欢之间，还有没有说完的约定。',text:'你建立了不止一段亲密关系，但知情、共同接受、信任或时间安排仍留着缺口。下一段故事需要让每个人说清自己的愿望，也让自己认真承担能做到的承诺。'};
   else if (stable && run.stats.balance >= 55) ending = { id: 'sugar', name: '两个人，各自发光', subtitle: `和${stable.name}一起，也把自己照顾好。`, text: `你和${stable.name}没有用全部时间证明亲密。聊清楚期待，给离线留余地，也为再次见面安排了一个可靠的时间。砂糖的甜，来自两个人都可以自由呼吸。` };
@@ -716,7 +727,7 @@ export function validateSave(payload) {
   const finite = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
   const strings = (v, max = 200) => Array.isArray(v) && v.length <= max && v.every(x => typeof x === 'string' && x.length <= 300);
   const ids = (v, allowed, max = 100) => strings(v, max) && new Set(v).size === v.length && v.every(x => allowed.includes(x));
-  if (!payload || ![1,2,3,4,5,6,VERSION].includes(payload.version) || !payload.legacy) error();
+  if (!payload || ![1,2,3,4,5,6,7,VERSION].includes(payload.version) || !payload.legacy) error();
   payload=JSON.parse(JSON.stringify(payload));
   if (payload.version===1) {
     const old=payload.run;
@@ -771,6 +782,27 @@ export function validateSave(payload) {
   if(payload.version===6) {
     for(const shot of payload.run?.photos || []) {
       shot.companion=shot.with;shot.title=byId(WORLD,shot.world)?.name || '';shot.caption='这张照片来自此前的旅程，原有世界、夜晚与同行者记录已保留。';shot.scope='private';shot.story=null;shot.choice=null;
+    }
+    payload.version=7;
+  }
+  if(payload.version===7) {
+    const old=payload.run;
+    if(old) {
+      old.departures={};
+      for(const [npc,rel] of Object.entries(old.relationships || {}))if(rel.status==='salt' && rel.introduced)beginDeparture(old,npc,null,npc,'legacy',true);
+      for(const route of NPC_ROUTES) {
+        const b=old.npcBonds?.[pairKey(...route.cast)];
+        if(b?.status==='salt')beginDeparture(old,...route.cast,b.initiator || route.cast[0],'legacy',true);
+      }
+      const convert=q=>{
+        if(!q || !['breakup','npc-departure','npc-breakup'].includes(q.id))return q;
+        const pair=q.id==='npc-breakup',stats=pair?old.npcBonds?.[pairKey(q.npc,q.other)]:old.relationships?.[q.npc];
+        if(stats?.status!=='sugar')return null;
+        const route=pair && NPC_ROUTES.find(r=>pairKey(...r.cast)===pairKey(q.npc,q.other));
+        if(pair && !route)error();
+        return departurePending(beginDeparture(old,pair?route.cast[0]:q.npc,pair?route.cast[1]:null,q.id==='breakup'?'player':q.npc,q.id==='breakup'?'request':'pressure'));
+      };
+      old.pending=convert(old.pending);old.queue=old.queue.map(convert).filter(Boolean);
     }
     payload.version=VERSION;
   }
@@ -827,11 +859,12 @@ export function validateSave(payload) {
       if((b.status==='sugar' && (![1,2].includes(b.stage) || b.sinceDay<1 || b.initiator!==null)) || (b.status==='salt' && (b.stage!==3 || !b.initiator || b.sinceDay<1)) || (b.status==='friend' && ![0,3,4].includes(b.stage)))error();
     }
     const validScene=q=>q && q.type==='scene' && SCENE_IDS.includes(q.id) && (!q.npc || !!byId(PEOPLE,q.npc)) && (!q.other || (!!byId(PEOPLE,q.other) && q.npc!==q.other)) && (!q.id.startsWith('multi-') || (q.npc && q.other)) && (q.id==='solo' || DAILY.some(s=>s.id===q.id && !s.npc) || PHOTO_STORIES.some(s=>s.id===q.id && !s.npc) || !!q.npc) && (q.index===undefined || (Number.isInteger(q.index) && finite(q.index,0,1))) && (q.dueDay===undefined || (Number.isInteger(q.dueDay) && finite(q.dueDay,1,DAYS+4))) && (q.id!=='reply' || (['accepted','waiting','rejected'].includes(q.answer) && !!r.relationships[q.npc]?.intent));
-    const validCast=q=>q.id.startsWith('photo-') ? photoReady(r,q) : q.id==='initiative' ? !!INITIATIVE[q.npc] && [0,1].includes(q.index) : ['conversation','date'].includes(q.id) ? [0,1].includes(q.index) : q.id.startsWith('daily-') ? DAILY.some(s=>s.id===q.id && s.npc===q.npc && !q.other) : q.id==='introduction' ? !!r.relationships[q.npc]?.met : q.id==='together' ? !!q.other : q.id.startsWith('npc-') && q.id!=='npc-departure' ? NPC_ROUTES.some(x=>x.cast[0]===q.npc && x.cast[1]===q.other) && (['npc-confession','npc-prelude'].includes(q.id) || !!r.npcBonds[pairKey(q.npc,q.other)]) : true;
+    if(!validateDepartures(r))error();
+    const validCast=q=>SEPARATION_IDS.includes(q.id) ? separationMatches(r,q) : ['breakup','npc-breakup','npc-departure'].includes(q.id) ? false : q.id.startsWith('photo-') ? photoReady(r,q) : q.id==='initiative' ? !!INITIATIVE[q.npc] && [0,1].includes(q.index) : ['conversation','date'].includes(q.id) ? [0,1].includes(q.index) : q.id.startsWith('daily-') ? DAILY.some(s=>s.id===q.id && s.npc===q.npc && !q.other) : q.id==='introduction' ? !!r.relationships[q.npc]?.met : q.id==='together' ? !!q.other : q.id.startsWith('npc-') && q.id!=='npc-departure' ? NPC_ROUTES.some(x=>x.cast[0]===q.npc && x.cast[1]===q.other) && (['npc-confession','npc-prelude'].includes(q.id) || !!r.npcBonds[pairKey(q.npc,q.other)]) : true;
     const validStory=q=>q && (q.dueDay===undefined || (Number.isInteger(q.dueDay) && finite(q.dueDay,1,DAYS+4))) && (q.type==='scene' ? validScene(q) && validCast(q) : q.type==='arc' ? !!byId(PEOPLE,q.npc) && Number.isInteger(q.index) && finite(q.index,0,1) && !!ARCS[q.npc]?.[q.index] : q.type==='event' && !!byId(EVENTS,q.id));
     const validPrelude=q=>!['courtship','npc-prelude'].includes(q?.id) || (q.type==='scene' && [0,1].includes(q.index) && (!q.narrator || (q.id==='npc-prelude' && q.narrator===narratorFor(q.npc,q.other) && isIntroduced(r,q.narrator))));
     if (!Array.isArray(r.queue) || r.queue.length>30 || !r.queue.every(q=>validStory(q) && validPrelude(q))) error();
-    if (r.notice!==null && (!r.notice || typeof r.notice!=='object' || !byId(PEOPLE,r.notice.npc) || !['accepted','waiting','rejected','withdraw','ended','npc-sugar','npc-ended','invitation'].includes(r.notice.answer) || !['title','text'].every(k=>typeof r.notice[k]==='string' && r.notice[k].length<=3000) || !Number.isInteger(r.notice.day) || !finite(r.notice.day,1,r.day))) error();
+    if (r.notice!==null && (!r.notice || typeof r.notice!=='object' || !byId(PEOPLE,r.notice.npc) || !['accepted','waiting','rejected','withdraw','ended','npc-sugar','npc-ended','invitation','reconsider','repaired'].includes(r.notice.answer) || !['title','text'].every(k=>typeof r.notice[k]==='string' && r.notice[k].length<=3000) || !Number.isInteger(r.notice.day) || !finite(r.notice.day,1,r.day))) error();
     if(r.notice && ['npc-sugar','npc-ended'].includes(r.notice.answer) && !NPC_ROUTES.some(x=>x.cast[0]===r.notice.npc && x.cast[1]===r.notice.other))error();
     for(const rel of Object.values(r.relationships)) {
       if(typeof rel.disclosed!=='boolean' || typeof rel.agreement!=='boolean') error();

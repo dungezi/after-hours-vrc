@@ -72,8 +72,9 @@ test('stable NPC pairs have a follow-up conversation and continue their relation
 
 test('NPCs can initiate a separation after pressure and every offered response respects it',()=>{
   for(const response of [0,1]) {
-    const r=pairReady(),bond=beginPair(r);advance(r,12);choose(r,2);assert.equal(r.pending.id,'npc-breakup');
-    assert.match(currentEvent(r).text,/主动/);assert.equal(bond.status,'sugar');choose(r,response);
+    const r=pairReady(),bond=beginPair(r);advance(r,12);choose(r,2);assert.equal(r.pending.id,'separation-prelude');
+    assert.equal(bond.status,'sugar');choose(r,1);advance(r,13);assert.equal(r.pending.index,1);choose(r,1);
+    advance(r,14);assert.equal(r.pending.id,'separation-proposal');assert.equal(bond.status,'sugar');choose(r,response);
     assert.equal(bond.status,'salt');assert.equal(bond.initiator,'rei');assert.equal(r.notice.answer,'npc-ended');
     assert.equal(r.relationships.rei.status,'friend');assert.doesNotThrow(()=>validateSave(payload(r)));
   }
@@ -82,7 +83,9 @@ test('NPCs can initiate a separation after pressure and every offered response r
 test('NPC life changes can lead to their own farewell even after a considerate conversation',()=>{
   const r=pairReady(NPC_ROUTES[1],42),bond=beginPair(r);assert.equal(bond.outlook,'change');
   advance(r,12);choose(r,0);assert.ok(bond.tension<35);assert.ok(bond.trust>30);
-  advance(r,16);assert.equal(r.pending.id,'npc-breakup');assert.match(currentEvent(r).text,/生活安排变了/);choose(r,0);assert.equal(bond.status,'salt');
+  advance(r,16);assert.equal(r.pending.id,'separation-prelude');assert.match(currentEvent(r).text,/生活安排变了/);choose(r,1);
+  advance(r,17);choose(r,1);advance(r,18);choose(r,0);assert.equal(bond.status,'sugar');assert.equal(r.notice.answer,'reconsider');
+  advance(r,19);assert.equal(r.pending.id,'separation-review');choose(r,0);assert.equal(bond.status,'salt');
 });
 
 test('NPC romance respects an existing exclusive relationship with the player',()=>{
@@ -116,16 +119,18 @@ test('a player joining an NPC open relationship must explicitly discuss the exis
 test('player sugar ends through an NPC conversation and a persistent notice, never a silent stat change',()=>{
   for(const response of [0,1,2]) {
     const r=fresh();r.day=5;ready(r,'raina');Object.assign(r.relationships.raina,{status:'sugar',tension:80});
-    perform(r,'next');assert.equal(r.pending.id,'npc-departure');assert.equal(r.relationships.raina.status,'sugar');
-    const restored=validateSave(payload(r)).run;choose(restored,response);assert.equal(restored.relationships.raina.status,'salt');assert.equal(restored.relationships.raina.drifted,true);
+    perform(r,'next');assert.equal(r.pending.id,'separation-prelude');assert.equal(r.relationships.raina.status,'sugar');
+    const restored=validateSave(payload(r)).run;choose(restored,response);assert.equal(restored.relationships.raina.status,'sugar');
+    advance(restored,7);choose(restored,1);advance(restored,8);assert.equal(restored.pending.id,'separation-proposal');choose(restored,0);
+    assert.equal(restored.relationships.raina.status,'salt');assert.equal(restored.relationships.raina.drifted,true);
     assert.equal(restored.notice.answer,'ended');assert.equal(validateSave(payload(restored)).run.notice.answer,'ended');
   }
 });
 
-test('an NPC farewell on the final night is read before the journey can finish',()=>{
+test('an unfinished farewell on the final night is not forced past its cross-night preludes',()=>{
   const r=fresh();r.day=28;ready(r,'raina');Object.assign(r.relationships.raina,{status:'sugar',tension:80});
-  perform(r,'next');assert.equal(r.ended,false);assert.equal(r.pending.id,'npc-departure');choose(r,0);
-  perform(r,'next');assert.equal(r.ended,true);assert.equal(r.ending.id,'goodbye');
+  perform(r,'next');assert.equal(r.ended,false);assert.equal(r.pending.id,'separation-prelude');choose(r,0);
+  perform(r,'next');assert.equal(r.ended,true);assert.equal(r.ending.id,'fragile');assert.equal(r.relationships.raina.status,'sugar');
 });
 
 test('version two saves preserve known contacts and high stats without reapplying old balance migration',()=>{
@@ -195,9 +200,9 @@ test('NPC and player consent are separate steps when a new bond overlaps both ne
 test('multiple NPC sugars receive scheduling stories and pressure can lead to an NPC farewell',()=>{
   const r=networkReady();choose(r,0);r.notice=null;advance(r,16);assert.equal(r.pending.id,'npc-calendar');
   const a=r.npcBonds['rei:yuki'],b=r.npcBonds['lin:rei'];a.tension=24;b.tension=24;
-  choose(r,1);assert.equal(a.tension,38);assert.equal(b.tension,38);assert.equal(r.pending.id,'npc-breakup');
-  choose(r,0);assert.equal(a.status,'salt');assert.equal(b.status,'sugar');assert.equal(r.notice.answer,'npc-ended');
-  assert.equal(r.queue.some(q=>q.id==='npc-breakup' && q.other==='lin'),true);assert.doesNotThrow(()=>validateSave(payload(r)));
+  choose(r,1);assert.equal(a.tension,38);assert.equal(b.tension,38);assert.equal(r.pending.id,'separation-prelude');
+  choose(r,0);assert.equal(a.status,'sugar');assert.equal(b.status,'sugar');
+  assert.equal(r.pending.id,'separation-prelude');assert.equal(Object.keys(r.departures).length,2);assert.equal(Object.values(r.departures).filter(d=>d.preludes.length===1).length,1);assert.doesNotThrow(()=>validateSave(payload(r)));
 });
 
 test('together requires two introduced online friends and costs one action with energy and balance',()=>{

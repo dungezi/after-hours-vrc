@@ -61,11 +61,13 @@ test('confession requires a story and an explicit reply; friendships remain avai
   Object.assign(r.relationships.ash,{affection:90,trust:90,meetings:5,communicated:true});
   assert.equal(actionReason(r,'confess','ash'),null);
   perform(r,'confess','ash');choose(r,0);assert.equal(r.pending.answer,'rejected');choose(r,0);assert.equal(r.relationships.ash.status,'friend');
-  perform(r,'breakup','raina');assert.equal(rel.status,'sugar');choose(r,0);assert.equal(rel.status,'salt');assert.ok(r.achievements.includes('salt'));
+  perform(r,'breakup','raina');assert.equal(r.pending.id,'separation-prelude');choose(r,0);assert.equal(rel.status,'sugar');
+  perform(r,'next');choose(r,0);perform(r,'next');assert.equal(r.pending.id,'separation-proposal');choose(r,1);
+  assert.equal(rel.status,'salt');assert.ok(r.achievements.includes('salt'));
 });
 test('unattended sugar relationships accumulate tension and can end',()=>{
   const r=newRun();Object.assign(r.relationships.raina,{status:'sugar',trust:70,affection:80,tension:70,lastDay:1});
-  jump(r,6);assert.equal(r.relationships.raina.status,'salt');assert.equal(r.relationships.raina.drifted,true);
+  jump(r,10);assert.equal(r.relationships.raina.status,'salt');assert.equal(r.relationships.raina.drifted,true);assert.equal(r.departures['player:raina'].preludes.length,2);
 });
 test('stable sugar, creation and burnout resolve to different endings',()=>{
   const a=newRun();Object.assign(a.relationships.raina,{status:'sugar',trust:80,affection:80,tension:10,communicated:true});a.stats.balance=70;assert.equal(finish(a).id,'sugar');

@@ -28,12 +28,7 @@ export const NPC_ROUTES = [
 NPC_ROUTES.sort((a,b)=>a.day-b.day);
 export function npcScene(run,pending) {
   const a=person(pending.npc),b=person(pending.other),name=a.name,other=b?.name;
-  if(pending.id==='npc-departure') {
-    const r=run.relationships[a.id],pressure=r.tension>=75;
-    return {npc:a.id,title:`${name}想结束这段砂糖关系`,subtitle:'来自对方的告别 · 关系决定由双方各自作出',
-      text:`${name}给你留下一条认真写过的消息：“${pressure?'最近的压力已经超过我能承担的范围。我想结束砂糖关系，而不是继续勉强自己。':'我们很久没有找到能兑现的相处安排。我想结束砂糖关系，重新照顾自己的生活。'}”\n\nTA 愿意说明自己的感受，也明确表示这次提出的是告别。过去的故事仍然会留在日记里，TA 希望自己的决定被听见，而不是被当成一次需要说服的犹豫。`,
-      choices:[choice('尊重决定，商量之后的联系与隐私','你们确认砂糖关系结束，并讲清之后是否联系、怎样处理共同回忆。',{effects:{balance:3},rel:{trust:2,tension:-12},outcome:'npc-departure'}),choice('说出遗憾，也接受这次告别','你说自己会难过，但不要求对方继续承担这段关系。你们各自留下可以重新整理生活的空间。',{effects:{mood:-3,balance:2},rel:{tension:-8},outcome:'npc-departure'}),choice('希望 TA 再忍耐一下','对方再次说明决定没有改变。你们结束砂糖关系，也需要暂时拉开联系的距离。',{effects:{mood:-5},rel:{trust:-8,tension:5},outcome:'npc-departure'})]};
-  }
+
   const key=[a.id,b.id].sort().join(':'),bond=run.npcBonds[key];
   if(pending.id==='together')return {npc:a.id,other:b.id,title:`今晚一起相处 · ${name}与${other}`,subtitle:'共同相处 · 你的选择会影响三方关系',
     text:`你邀请${name}与${other}来到同一个世界。${name}讲起今晚想做的事，${other}也有自己的安排。${bond?.status==='sugar'?'他们已经是砂糖，这次相处也会影响两人已有的信任与压力。':'他们开始了解彼此，也在观察你会不会认真听见不同的愿望。'}`,
@@ -60,8 +55,6 @@ export function npcScene(run,pending) {
     choices:[choice('愿意接受，明确知情、时间和退出权','你只为自己的关系表达同意。他们也分别确认自己的愿望。新的约定需要所有当事人愿意。',{outcome:'npc-bond-open'}),choice('不愿改变现有约定，坦诚说明','你没有同意开放关系。他们尊重这个答案，暂时保持朋友，没有绕过已有承诺确认砂糖。',{outcome:'npc-bond-decline'})]};
   if(pending.id==='npc-date')return {npc:a.id,other:b.id,title:`${name}与${other}的相处练习`,subtitle:'朋友的砂糖故事 · 确认关系之后',text:route.date,
     choices:[choice('听两人说出各自能做到的安排','两个人给各自的生活留出位置，并把做得到的邀约写清楚。你是听众，承诺由他们共同决定。',{pairEffects:{trust:8,tension:-6},outcome:'npc-bond-date'}),choice('留给他们自己商量，不替谁答应','他们花了一些时间才写好安排。有人想留下更多独处，这个愿望也被认真听见。',{pairEffects:{trust:5,tension:-3},outcome:'npc-bond-date'}),choice('建议既然是砂糖，就应该每天一起上线','这个建议让两个人发现彼此一直没敢讲清的压力。他们不愿靠强迫出席继续维持关系。',{pairEffects:{trust:-20,tension:32},outcome:'npc-bond-date'})]};
-  if(pending.id==='npc-breakup')return {npc:a.id,other:b.id,title:`${name}向${other}提出告别`,subtitle:'朋友的关系告别 · 不是由旁人投票决定',
-    text:(bond?.tension>=35 || bond?.trust<=30?`两个人发现，最近的相处变成了需要勉强自己的安排。${name}主动说明希望结束砂糖关系，${other}听完了理由。告别不是请你选边站，也不需要一场围观。\n\n`:'')+route.goodbye,
-    choices:[choice('分别询问他们希望怎样被陪伴','两个人确认关系结束。你尊重他们各自的联系范围，没有把私下的故事变成群里的谈资。',{outcome:'npc-bond-end'}),choice('尊重告别，不替任何人说服另一方','你没有要求他们复合。共同做过的事仍然存在，接下来的相处由当事人重新决定。',{outcome:'npc-bond-end'})]};
+
   return null;
 }

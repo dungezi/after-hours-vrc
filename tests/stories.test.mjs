@@ -123,7 +123,8 @@ test('hidden relationships are discovered later and have trust consequences',()=
 test('a character can decline nonexclusive arrangements without being forced into consent',()=>{
   const r=run();ready(r,'raina');ready(r,'lin');r.relationships.raina.status='sugar';r.relationships.lin.status='sugar';
   r.pending={type:'scene',id:'multi-open',npc:'lin',other:'raina'};choose(r,0);
-  assert.equal(r.relationships.raina.status,'friend');assert.equal(r.relationships.raina.agreement,false);assert.equal(r.relationships.lin.status,'sugar');
+  assert.equal(r.relationships.raina.status,'sugar');assert.equal(r.relationships.raina.agreement,false);assert.equal(r.relationships.lin.status,'sugar');
+  assert.equal(r.pending.id,'separation-prelude');assert.equal(r.departures['player:raina'].reason,'boundaries');
 });
 test('unnegotiated multiple relationships cannot receive the stable single-partner ending',()=>{
   const r=run();ready(r,'rei');ready(r,'lin');r.relationships.rei.status='sugar';r.relationships.lin.status='sugar';
