@@ -15,15 +15,15 @@ function ready(id='raina',day=15){
 }
 function next(r,day){while(r.day<day){r.notice=null;assert.equal(r.pending,null);perform(r,'next');if(r.pending)break;}}
 
-test('48 daily scenes have distinct titles, branches and outcomes, and four-step prerequisites',()=>{
-  assert.equal(DAILY.length,48);assert.equal(new Set(DAILY.map(s=>s.id)).size,48);
+test('72 daily scenes have distinct titles, branches and outcomes, and six-step prerequisites',()=>{
+  assert.equal(DAILY.length,72);assert.equal(new Set(DAILY.map(s=>s.id)).size,72);
   const r=fresh();r.day=28;const titles=new Set(),outcomes=new Set();
   for(const s of DAILY){
     const e=dailyScene(r,{id:s.id,npc:s.npc});titles.add(e.title);
     for(const c of e.choices.slice(0,2))outcomes.add(c.text);
     if(s.index)assert.equal(dailyReady(r,s),false);
   }
-  assert.equal(titles.size,48);assert.equal(outcomes.size,96);
+  assert.equal(titles.size,72);assert.equal(outcomes.size,144);
 });
 
 test('world daily chapters do not repeat, wait across nights and preserve a deferred choice',()=>{
@@ -134,7 +134,7 @@ test('new daily and initiative scenes survive saved reloads and reject malformed
 
 test('version 5 upgrades retain old dialogue read state without changing relationship progress',()=>{
   const r=fresh();r.pending={type:'scene',id:'conversation',npc:'raina',index:0};choose(r,0);delete r.storyFlags['read:conversation:raina:0'];
-  const copy=validateSave({version:5,run:r,legacy:freshLegacy()});assert.equal(copy.version,6);assert.equal(copy.run.storyFlags['read:conversation:raina:0'],1);
+  const copy=validateSave({version:5,run:r,legacy:freshLegacy()});assert.equal(copy.version,VERSION);assert.equal(copy.run.storyFlags['read:conversation:raina:0'],1);
   assert.deepEqual(copy.run.relationships,r.relationships);
 });
 

@@ -1,4 +1,5 @@
 import { PEOPLE } from './data.js';
+import { LATER_DAILY } from './later-daily-stories.js';
 
 // 每条日常线各有四章，后章读取前章的选择；每局只读一次。
 const WORLD_LINES = {
@@ -93,6 +94,11 @@ const RESULTS = {
   lin:[['凛说起那段没有鼓点的旋律，声音很轻。你看见了舞台歌单之外的一点她自己。','两首私人收藏交换过来。没有演出效果，也不妨碍这次分享很重要。'],['她带了想去的地图，没有带设备。赴约第一次从自己的期待开始安排。','地点选在一间小屋。凛不用让房间热闹，仍然有人愿意坐在她旁边。'],['她讲起害怕不再被需要的瞬间。晚安消息还在，拒绝也没有让友谊消失。','凛开始分得清自己想去和怕别人失望。下一次答应能够更接近真正的愿望。'],['结束点被写进歌单。散场不再意味着有人不够努力维持气氛。','最后一首是你们交换过的歌。听完之后灯光调暗，聊天留出了安静的空隙。']],
   yuki:[['弥生放慢预览，你们一起找到转向的那一帧。失败终于成为能一起观察的过程。','她讲起想让纸鸟落到一盏路灯上。动作文件外面，藏着最初的故事。'],['工程窗口关掉了，她慢慢讲起晚饭。待办没有清空，休息也不需要等待授权。','明天的第一步写在便签上。她保存收工，第一次不必在下线前解决每一个问题。'],['弥生把两版预览都留下。努力修复与有人喜欢最初的样子，没有彼此抵消。','她选了自己喜欢的一次转弯，又保留那次撞墙。作品里可以同时放下进步和开始。'],['你看见反复修改的几处痕迹。弥生讲完最难的那一步，没再急着换到完成后的展示。','两个慢慢改变的过程放在一起。纸鸟终于飞出了工程窗口，也飞进了一段能互相理解的对话。']],
 };
+for(const [key,beats] of Object.entries(LATER_DAILY)) {
+  const world=!!WORLD_LINES[key];
+  beats.forEach((beat,i)=>DAILY.push({id:`daily-${world?'world':'person'}-${key}-${i+4}`,index:i+4,...(world?{world:key}:{npc:key}),beat:beat.slice(0,4)}));
+  RESULTS[key].push(...beats.map(beat=>beat.slice(4)));
+}
 export function dailyReady(run, scene) {
   if(run.storySeen.includes(scene.id) || run.day<1+scene.index*3)return false;
   if(scene.npc && (!run.relationships[scene.npc].introduced || run.relationships[scene.npc].meetings<scene.index+1))return false;
@@ -105,7 +111,7 @@ export function dailyScene(run,pending) {
   const results=RESULTS[s.world || s.npc][s.index];
   const echo=s.index>0 && run.storyFlags['choice:'+previous]===2?'上次你选择暂时搁下这件事。今天，对方重新留出了谈话的机会。\n\n':'';
   const adapted=s.id==='daily-world-cafe-3'?text.replace('昨天的误会已经说开',run.storyFlags['choice:'+previous]===2?'之前的误会还没有完全说开':'之前的误会已经说开'):text;
-  return {id:s.id,npc:s.npc,title,subtitle:`${s.npc?PEOPLE.find(p=>p.id===s.npc).name+'的日常':'世界里的小故事'} · ${s.index+1} / 4`,text:echo+adapted,choices:[
+  return {id:s.id,npc:s.npc,title,subtitle:`${s.npc?PEOPLE.find(p=>p.id===s.npc).name+'的日常':'世界里的小故事'} · ${s.index+1} / 6`,text:echo+adapted,choices:[
     {label:a,text:results[0],effects:{mood:2},rel:s.npc?{trust:3,affection:1}:{},outcome:'daily-read'},
     {label:b,text:results[1],effects:{balance:2},rel:s.npc?{trust:2,tension:-2}:{},outcome:'daily-read'},
     {label:'今晚先搁下这件事',text:'这次没有继续往下谈。现实里的安排和各自的感受，仍然值得之后认真处理。',effects:{},rel:{},outcome:'daily-read'},
