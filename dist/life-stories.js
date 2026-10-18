@@ -1,5 +1,6 @@
 import { PEOPLE } from './data.js';
 import { departureContactReason } from './separation-stories.js';
+import { freshPlan, advancePlan, validPlan } from './life-changes.js';
 
 const p=id=>PEOPLE.find(x=>x.id===id);
 const OFFSETS=[3,10,19];
@@ -60,13 +61,21 @@ export const LIFE_PLANS={
  ]]},
 };
 
+export const REDUCED={
+ raina:['札记最终只留下一个入口的试读页，其余路线暂未写完。雨音把覆盖范围标清，不再称它为整张世界的指南。','私人路线图只完成了那张长椅附近的一页。雨音把它单独装订，封面仍然留白，下一本也暂时不开始。'],
+ ash:['阿澈只确认了前两个机关，把其余提示标成待验证。这份短攻略可以使用，也没有声称自己完成了原定的半程。','小队只凑成了一次短探索，未能完成三次集合。阿澈保留轮流带路的规则，也接受暂时没有下一场。'],
+ mika:['手记只收进两段获得当事人许可的文字，整册的计划暂停。小满没有拿没得到回应的那段记忆来凑页数。','纪念卡先做成一张可拆的样卡，没有收回整套。小满把未完成的设计存好，不催还在别人手里的纸。'],
+ rei:['零点只完成了入口与台阶的低负担测试，日出效果暂未发布。这一版是测试台，不能冒充已经做好的观测世界。','样例先公开了一段经过验证的安装说明，异步接手工程尚未完成。零点清楚标明可使用与还不能保证的范围。'],
+ lin:['凛只保存了一段停顿的试听，完整曲子还没写完。她决定先关掉工程，而不是临时拼一个副歌来换取掌声。','短舞只试完一个桌面拍点，没有办成原定的整轮试演。凛与参与者确认可以保留这段，其他动作以后再说。'],
+ yuki:['纸鸟只完成一次低处落地，还不能走完原定的飞行。弥生把它标成动作练习，未完成的高处目的地仍在草图上。','番外只做到帽子飞走的短循环，还没有最后一帧。弥生保存了这段预览，坦率说这次先停在这里。'],
+};
 export const LIFE_SCENES=PEOPLE.flatMap(p=>[0,1,2].map(index=>({id:`life-${p.id}-${index}`,npc:p.id,index})));
 export function freshLives(day=1,seed=0) {
-  return Object.fromEntries(PEOPLE.map((p,i)=>[p.id,{anchor:day,path:(seed+i)%2,milestones:[],read:0,readDay:0,heard:[]}]));
+  return Object.fromEntries(PEOPLE.map((p,i)=>[p.id,{anchor:day,path:(seed+i)%2,milestones:[],read:0,readDay:0,heard:[],plan:freshPlan(day,seed,i)}]));
 }
 export function advanceLives(run) {
   const updates=[];
-  for(const p of PEOPLE){const life=run.lives[p.id],index=life.milestones.length;if(index<3 && run.day>=life.anchor+OFFSETS[index]){life.milestones.push({day:run.day,path:life.path});if(run.relationships[p.id].introduced && !departureContactReason(run,p.id))updates.push({npc:p.id,title:LIFE_PLANS[p.id].paths[life.path][index][0]});}}
+  for(const p of PEOPLE){const life=run.lives[p.id],index=life.milestones.length,update=advancePlan(run,p.id,life,LIFE_PLANS[p.id].friend);if(update&&run.relationships[p.id].introduced&&!departureContactReason(run,p.id))updates.push({npc:p.id,...update,title:update.title||LIFE_PLANS[p.id].paths[life.path][index][0]});}
   return updates;
 }
 export function lifeReady(run,s) {
@@ -78,8 +87,9 @@ export function lifeScene(run,q) {
   const s=LIFE_SCENES.find(s=>s.id===q.id);if(!s)return null;
   const life=run.lives[s.npc],milestone=life.milestones[s.index];if(!milestone)return null;
   const plan=LIFE_PLANS[s.npc],other=run.relationships[plan.friend]?.introduced && !departureContactReason(run,plan.friend)?plan.friend:null;
-  const [title,text]=plan.paths[milestone.path][s.index],name=p(s.npc).name;
-  const current=life.milestones.length===s.index+1 && s.index<2;
+  let [title,text]=plan.paths[milestone.path][s.index];const name=p(s.npc).name;
+  if(milestone.outcome==='reduced'){title+=' · 缩小范围的这一版';text=REDUCED[s.npc][milestone.path];}
+  const current=life.milestones.length===s.index+1 && s.index<2 && life.plan.state==='working';
   const previous=life.milestones[s.index-1],transition=previous&&previous.path!==milestone.path?`前一阶段的尝试被保留成阶段稿。后来${name}把接下来的时间转向了「${plan.goals[milestone.path]}」，这次讲的是改方向后的新进展。\n\n`:'';
   const scene={id:s.id,npc:s.npc,...(other?{other}:{}),title,subtitle:`${name}自己的计划 · ${s.index+1} / 3`,text:`第 ${milestone.day} 夜，${name}的计划走到了这里。这段进展没有等待你的行动。\n\n${plan.voice}\n\n${transition}${text.replaceAll('{friend}',other?p(other).name:'一位朋友')}${current?'\n\n对方接下来还有两种方向，愿意听你的建议；是否改变仍由对方自己决定。':'\n\n这部分已经发生，你的回应不会改写过去。'}`,choices:[
     {label:current?'建议把一个小目标做扎实，分享自己会的方法':'具体问问最难的一步是怎样做完的',text:current?`${name}听完建议，决定下一阶段先保留一个明确的小目标。你分享了方法，却没有代替对方做完整件事。`:`${name}讲了一个之前没提过的细节。完成的计划有了被认真听见的去处。`,effects:{craft:1,mood:-1},rel:{trust:2},outcome:'life-read',lifePath:current?0:null},
@@ -91,5 +101,5 @@ export function lifeScene(run,q) {
 }
 export function validLives(run) {
   if(!run.lives || Object.keys(run.lives).length!==PEOPLE.length)return false;
-  return PEOPLE.every(p=>{const l=run.lives[p.id];return l&&Number.isInteger(l.anchor)&&l.anchor>=1&&l.anchor<=run.day&&[0,1].includes(l.path)&&Array.isArray(l.milestones)&&l.milestones.length<=3&&l.milestones.every((m,i)=>m&&Number.isInteger(m.day)&&m.day>=l.anchor+OFFSETS[i]&&m.day<=run.day&&(!i||m.day>l.milestones[i-1].day)&&[0,1].includes(m.path))&&Number.isInteger(l.read)&&l.read>=0&&l.read<=l.milestones.length&&Array.isArray(l.heard)&&l.heard.length===l.read&&l.heard.every((d,i)=>Number.isInteger(d)&&d>=l.milestones[i].day&&d<=run.day&&(!i||d>=l.heard[i-1]+2))&&Number.isInteger(l.readDay)&&l.readDay===(l.heard.at(-1)||0)&&[0,1,2].every(i=>run.storySeen.includes(`life-${p.id}-${i}`)===(l.read>i));});
+  return PEOPLE.every(p=>{const l=run.lives[p.id];return l&&validPlan(l,run.day)&&Number.isInteger(l.anchor)&&l.anchor>=1&&l.anchor<=run.day&&[0,1].includes(l.path)&&Array.isArray(l.milestones)&&l.milestones.length<=3&&l.milestones.every((m,i)=>m&&Number.isInteger(m.day)&&m.day>=l.anchor+OFFSETS[i]&&m.day<=run.day&&(!i||m.day>l.milestones[i-1].day)&&[0,1].includes(m.path)&&(m.outcome===undefined||i===2&&["completed","reduced"].includes(m.outcome)))&&Number.isInteger(l.read)&&l.read>=0&&l.read<=l.milestones.length&&Array.isArray(l.heard)&&l.heard.length===l.read&&l.heard.every((d,i)=>Number.isInteger(d)&&d>=l.milestones[i].day&&d<=run.day&&(!i||d>=l.heard[i-1]+2))&&Number.isInteger(l.readDay)&&l.readDay===(l.heard.at(-1)||0)&&[0,1,2].every(i=>run.storySeen.includes(`life-${p.id}-${i}`)===(l.read>i));});
 }

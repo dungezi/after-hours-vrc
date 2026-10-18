@@ -9,3 +9,5 @@ await import('./circle.test.mjs');
 await import('./lifecycle.test.mjs');
 await import('./journey.test.mjs');
 await import('./living.test.mjs');
+await import('./appointments.test.mjs');
+await import('./completion.test.mjs');

@@ -93,7 +93,7 @@ export const ARCS = {
     { title: '朋友也可以很重要', text: '阿澈把你拉进一个小小的周年聚会：“我知道你很重要，但对我来说，那不一定要叫恋爱。这样的回答，会让你失望吗？”', choices: [choice('坦诚说期待，也尊重 TA 的答案', '你们没有回避失落，也没有让朋友关系变成安慰奖。', { mood: 6, balance: 6 }, { trust: 16, tension: -10 }, { friendship: true }), choice('为这份友谊举杯', '关系有了一个很稳的名字。你们约好明年还一起给新人指路。', { social: 6, mood: 10 }, { trust: 14 }, { friendship: true }), choice('试着证明恋爱会更好', '你说了很多理由。阿澈只是重复：“但那不是我想要的。”', { mood: -6 }, { trust: -8, tension: 16 })] },
   ],
   mika: [
-    { title: '“改天”是哪一天？', text: '小满翻着截图日记：“我以前等过很多个改天。你不必一直陪我，但我想知道，答应的事情什么时候会发生。”', choices: [choice('给出能做到的约定', '你把下一次见面写进日历，留出余地，也认真兑现。', { balance: 4 }, { trust: 12, affection: 7 }), choice('说清楚不确定的安排', '不确定没有消失，但不用靠猜测来填满了。', { social: 5 }, { trust: 11, tension: -5 }), choice('保证以后每天都上线', '日记空白处写进了一个过大的承诺。', { mood: 8, balance: -7 }, { affection: 9, tension: 10 })] },
+    { title: '“改天”是哪一天？', text: '小满翻着截图日记：“我以前等过很多个改天。你不必一直陪我，但我想知道，答应的事情什么时候会发生。”', choices: [choice('给出能做到的约定', '你把愿意承担的范围说清。具体夜晚、时段与地点仍需在预约日历中另行提出并确认，这次谈话没有冒充已经赴约。', { balance: 4 }, { trust: 12, affection: 7 }), choice('说清楚不确定的安排', '不确定没有消失，但不用靠猜测来填满了。', { social: 5 }, { trust: 11, tension: -5 }), choice('保证以后每天都上线', '日记空白处写进了一个过大的承诺。', { mood: 8, balance: -7 }, { affection: 9, tension: 10 })] },
     { title: '这次想把名字写清楚', text: '小满递来一张双人照，标题栏还是空的。“我想和你认真讨论砂糖。是只在这里，还是也想了解现实？你希望是什么样？”', choices: [choice('先确认共同期待，再慢慢向前', '你们写下现在能接受的范围，也允许以后继续讨论。亲密终于不必靠猜。', { mood: 12 }, { affection: 15, trust: 12, tension: -5 }), choice('坦诚说还没准备好', '“谢谢你没有为了让我开心而答应。”照片仍然被保留。', { balance: 6 }, { trust: 12, affection: -2 }), choice('为了不让 TA 失落，全部答应', '名字被写得很漂亮，你却还没想清楚那些字意味着什么。', { mood: 8, balance: -8 }, { affection: 8, tension: 15 })] },
   ],
   rei: [
@@ -102,7 +102,7 @@ export const ARCS = {
   ],
   lin: [
     { title: '热闹的人，也会怕冷场', text: '凛关掉了音乐：“大家好像喜欢我永远开心。可我今天不想跳舞。”屏幕里的电子猫把耳朵垂了下来。', choices: [choice('告诉 TA 不表演也值得被喜欢', '你们在走廊坐了一会儿。没有音乐，谈话却没有停。', { mood: 5 }, { trust: 14, affection: 6 }), choice('一起去安静的观星台', '你选了一个没有舞池的世界，把今晚交还给 TA。', { energy: -4, balance: 3 }, { trust: 12, affection: 5 }), choice('鼓励 TA 打起精神继续演出', '凛重新打开音乐。你不知道那副笑脸还花了多少力气。', { social: 3 }, { trust: -5, tension: 10 })] },
-    { title: '你不必是我唯一的观众', text: '演出后，凛收到好多邀请。“喜欢你，也喜欢跳舞和朋友。这些不是在争抢同一个位置。”TA 看着你，等一个回应。', choices: [choice('支持 TA 的舞台，也保留自己的生活', '你们没有缩小世界，而是在各自的世界里为彼此留了门。', { balance: 8, social: 5 }, { trust: 15, affection: 10, tension: -8 }), choice('商量固定的两人时间', '人群与独处都有了位置。承诺变得具体，也更容易做到。', { mood: 8 }, { trust: 12, affection: 12 }), choice('要求以后只为自己跳舞', '舞池很大，这句话却让它突然变窄了。', { mood: 3 }, { trust: -12, tension: 20 })] },
+    { title: '你不必是我唯一的观众', text: '演出后，凛收到好多邀请。“喜欢你，也喜欢跳舞和朋友。这些不是在争抢同一个位置。”TA 看着你，等一个回应。', choices: [choice('支持 TA 的舞台，也保留自己的生活', '你们没有缩小世界，而是在各自的世界里为彼此留了门。', { balance: 8, social: 5 }, { trust: 15, affection: 10, tension: -8 }), choice('商量固定的两人时间', '你们愿意为两人时间找一个位置。仍需在预约日历中另行确认具体时段，没有把这次讨论记成已经赴约。', { mood: 8 }, { trust: 12, affection: 12 }), choice('要求以后只为自己跳舞', '舞池很大，这句话却让它突然变窄了。', { mood: 3 }, { trust: -12, tension: 20 })] },
   ],
   yuki: [
     { title: '关掉镜子之后', text: '弥生换回默认模型：“有时我觉得，如果不是这个好看的 Avatar，你们可能就不会想和我说话。”你想起了 TA 帮你查报错的每一个晚上。', choices: [choice('具体说起 TA 曾经帮助你的事', '“原来那些你都记得。”TA 的声音没有变，房间却暖了一些。', { social: 5 }, { trust: 14, affection: 5 }), choice('邀请 TA 一起做个不必漂亮的作品', '你们给一只歪歪扭扭的纸鸟装上碰撞体。它飞不远，笑声却很长。', { craft: 8, mood: 5 }, { trust: 10, affection: 7 }), choice('继续夸 TA 的模型特别好看', '夸奖没有错，只是没有回答今晚那个问题。', { mood: 3 }, { affection: 3, tension: 5 })] },

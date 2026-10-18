@@ -38,7 +38,8 @@ test('version nine preserves read daily continuity and starts independent lives 
 
 test('NPC goals progress during nights with no conversation and never silently establish relationships',()=>{
   const r=fresh();while(r.day<22)next(r);
-  for(const id of PEOPLE.map(p=>p.id)){assert.equal(r.lives[id].milestones.length,3);assert.equal(r.relationships[id].meetings,0);assert.equal(r.relationships[id].status,'friend');assert.equal(r.lives[id].read,0);}
+  assert.ok(Object.values(r.lives).some(l=>l.plan.state==='paused'));assert.ok(Object.values(r.lives).some(l=>l.milestones.length===3));
+  for(const id of PEOPLE.map(p=>p.id)){assert.ok(r.lives[id].milestones.length>=1);assert.equal(r.relationships[id].meetings,0);assert.equal(r.relationships[id].status,'friend');assert.equal(r.lives[id].read,0);}
   assert.equal(Object.keys(r.npcBonds).length,0);assert.doesNotThrow(()=>validateSave(payload(r)));
 });
 
@@ -50,7 +51,7 @@ test('unintroduced NPCs have private lives without leaking their identities into
 });
 
 test('life milestones can be heard across nights but cannot be skipped or replayed for rewards',()=>{
-  const r=fresh(4);advanceLives(r);r.pending=lifePending('raina',0);choose(r,2);const ap=r.ap;
+  const r=fresh(4);r.lives.raina.plan.temper=0;advanceLives(r);r.pending=lifePending('raina',0);choose(r,2);const ap=r.ap;
   r.day=11;advanceLives(r);assert.equal(lifeReady(r,LIFE_SCENES.find(s=>s.id==='life-raina-1')),true);
   r.pending=lifePending('raina',2);assert.throws(()=>choose(r,0));r.pending=lifePending('raina',1);choose(r,2);
   assert.equal(r.ap,ap);r.pending=lifePending('raina',1);assert.throws(()=>choose(r,0));r.pending=null;
@@ -58,14 +59,14 @@ test('life milestones can be heard across nights but cannot be skipped or replay
 });
 
 test('support may change a future goal while preserving the exact earlier milestone',()=>{
-  const r=fresh(4);r.lives.raina.path=0;r.relationships.raina.trust=60;advanceLives(r);
+  const r=fresh(4);r.lives.raina.path=0;r.lives.raina.plan.temper=0;r.relationships.raina.trust=60;advanceLives(r);
   r.pending=lifePending('raina',0);choose(r,1);assert.equal(r.lives.raina.path,1);assert.equal(r.lives.raina.milestones[0].path,0);
   r.day=11;advanceLives(r);r.pending=lifePending('raina',1);assert.match(currentEvent(r).text,/改方向后的新进展/);assert.match(currentEvent(r).title,/长椅/);choose(r,2);
   assert.equal(r.lives.raina.milestones[0].path,0);assert.doesNotThrow(()=>validateSave(payload(r)));
 });
 
 test('independent characters can decline advice, and old news cannot rewrite goals already completed',()=>{
-  const r=fresh(4);know(r);r.lives.rei.path=0;r.relationships.rei.trust=10;advanceLives(r);
+  const r=fresh(4);know(r);r.lives.rei.path=0;r.lives.rei.plan.temper=0;r.relationships.rei.trust=10;advanceLives(r);
   r.pending=lifePending('rei',0);assert.match(currentEvent(r).choices[1].text,/没有直接替对方改变/);choose(r,1);assert.equal(r.lives.rei.path,0);
   r.day=11;advanceLives(r);r.day=20;advanceLives(r);r.relationships.rei.trust=99;
   r.pending=lifePending('rei',1);assert.equal(currentEvent(r).choices[1].lifePath,null);choose(r,1);assert.equal(r.lives.rei.path,0);

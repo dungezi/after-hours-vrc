@@ -1,4 +1,6 @@
-import { LIFE_PLANS } from './life-stories.js';
+import { themeRoute } from './theme-branches.js';
+import { characterEnding } from './finale-stories.js';
+import { LIFE_PLANS, REDUCED } from './life-stories.js';
 import { THEMES } from './replay-stories.js';
 import { PEOPLE, WORLD, PROJECTS } from './data.js';
 import { DAILY, dailyReady } from './daily-stories.js';
@@ -51,7 +53,7 @@ export function storyHints(run,npc=null) {
   }
   const daily=DAILY.find(s=>!run.storySeen.includes(s.id)&&(npc?s.npc===npc:s.world===run.world));
   if(daily){const previous=daily.id.slice(0,-1)+(daily.index-1),earliest=Math.max(1+daily.index*3,(run.storyFlags['read:'+previous]||1)+2);hints.push({title:(daily.npc?person(daily.npc).name:WORLD.find(w=>w.id===daily.world).name)+' · 日常',text:run.storyFlags['defer:'+daily.id]===run.day?'今晚先搁下了这件事，下一夜可以重新接续。':dailyReady(run,daily)?'有一段新的日常可以了解。':daily.index&&run.storySeen.includes(previous)?`第 ${earliest} 夜起，留意前一次经历的后续。`:'从一次探索或聊天开始，后面的章节会按共同经历推进。'});}
-  if(npc && run.lives?.[npc]){const life=run.lives[npc],plan=LIFE_PLANS[npc];hints.unshift({title:person(npc).name+'自己的计划',text:`${plan.goals[life.path]} · 已有 ${life.milestones.length} 段实际进展。`+(life.read<life.milestones.length?'可以在朋友近况中了解，后章仍需留出相处时间。':'对方会按自己的日程继续，不必用反复聊天推动。')});}
+  if(npc && run.lives?.[npc]){const life=run.lives[npc],plan=LIFE_PLANS[npc];hints.unshift({title:person(npc).name+'自己的计划',text:`${plan.goals[life.path]} · 已有 ${life.milestones.length} 段实际进展。`+(life.read<life.milestones.length?'可以在朋友近况中了解，后章仍需留出相处时间。':life.plan?.state==='paused'?'这份计划目前暂停，可以了解最近一次变化，不会靠反复聊天自动完成。':'对方会继续作自己的决定，不必用反复聊天推动。')});}
   if(!npc && run.encore?.route){const t=THEMES.find(t=>t.id===run.encore.route),n=run.encore.days.length;hints.unshift({title:'本轮主题 · '+t.name,text:n===3?'这一轮主题已走完，结算后会收录主题进度。':t.cast.some(id=>departureContactReason(run,id))?'这条主题涉及暂停联系的朋友，目前先缓一缓，不会强制安排见面。':t.cast.some(id=>!run.relationships[id].introduced)?'先认识'+t.cast.map(id=>person(id).name).join('、')+'，主题不会跳过初次相遇。':`已读 ${n} / 3 段；第 ${Math.max(4+n*7,(run.encore.days.at(-1)||1)+3)} 夜起留意朋友近况。`});}
   return hints.slice(0,npc?4:5);
 }
@@ -78,7 +80,8 @@ export function epilogueFor(run) {
   for(const p of PROJECTS)if(run.projects[p.id]>=p.goal)out.push({title:'你留下的作品 · '+p.name,text:p.id==='event'?'那场聚会有了真正的结束时间。以后有人继续办活动，也会记得给旁听的人和提前离开的人留位置。':p.id==='world'?'世界已经可以被走进。以后的一次修补、一次重新点灯，都会从这一版真实完成的作品开始。':'你完成的配色和细节留在模型里。它可以继续修改，也已经足够代表这一阶段的自己。'});
   for(const [key,b] of Object.entries(run.npcBonds))if(['sugar','salt'].includes(b.status)){const names=key.split(':').map(id=>person(id).name).join('与'),d=run.departures['pair:'+key];out.push({title:names+' · 他们的后来',text:b.status==='sugar'?`两人的砂糖关系仍在继续。${b.tension>30?'已经存在的压力还需要他们自己处理。':'接下来的相处仍由他们自己安排。'}`:d?.contact==='none'?'两人保留了暂不联系的距离，共同朋友也没有替他们安排重逢。':'两人已经告别砂糖。后续按已经讨论的联系范围继续，没有被旁人的期待推回复合。'});}
   for(const line of new Set(CIRCLE_SCENES.filter(s=>s.index===2&&run.storySeen.includes(s.id)).map(s=>s.line))){const first=run.storyFlags[`choice:circle-${line.key}-0`];out.push({title:line.name+' · 留下的那一件事',text:`这一条故事从「${line.beats[0].branches[first??0][0]}」开始，后来走完了三个章节。最初的选择与之后真正读过的不同经历，已经一起收进故事册。`});}
-  for(const p of PEOPLE){const life=run.lives?.[p.id];if(!run.relationships[p.id].introduced || departureContactReason(run,p.id) || !life?.milestones.length)continue;const latest=life.milestones.at(-1),plan=LIFE_PLANS[p.id];out.push({title:p.name+'自己的后来 · '+plan.paths[latest.path][life.milestones.length-1][0],text:life.milestones.length===3?'这个阶段的计划已经走完，不依赖你是否读过每条消息。'+plan.paths[latest.path][2][1].replaceAll('{friend}','一位朋友'):'对方的计划还在继续，已经发生的进展留在近况里；旅程结束不会把尚未完成的目标写成已经完成。'});}
-  if(run.encore?.route){const t=THEMES.find(t=>t.id===run.encore.route);out.push({title:'本轮主题 · '+t.name,text:run.encore.days.length===3?t.branches[run.encore.choices[0]][1]+' 最后一段采用了「'+run.storybook.findLast(x=>x.id===`encore-${t.id}-2`)?.options?.[run.encore.choices[2]]+'」。':'主题尚未走完，尾声只保留实际读过的 '+run.encore.days.length+' 段，不补造剩余经历。'});}
+  for(const p of PEOPLE){const life=run.lives?.[p.id];if(!run.relationships[p.id].introduced || departureContactReason(run,p.id) || !life?.milestones.length)continue;const latest=life.milestones.at(-1),plan=LIFE_PLANS[p.id];out.push({title:p.name+'自己的后来 · '+plan.paths[latest.path][life.milestones.length-1][0],text:life.milestones.length===3?(latest.outcome==='reduced'?REDUCED[p.id][latest.path]:'这个阶段的计划已经走完，不依赖你是否读过每条消息。'+plan.paths[latest.path][2][1].replaceAll('{friend}','一位朋友')):life.plan?.state==='paused'?'这份计划已经暂停，之前做过的部分与没有完成的目标都留在记录里。暂停可能继续到旅程以后，不会被尾声改写成成功。':'对方的计划还在继续，已经发生的进展留在近况里；旅程结束不会把尚未完成的目标写成已经完成。'});}
+  if(run.encore?.route){const t=THEMES.find(t=>t.id===run.encore.route);out.push({title:'本轮主题 · '+t.name,text:run.encore.days.length===3?themeRoute(t,run.encore.choices).title+'。'+themeRoute(t,run.encore.choices).text+' 最后一段采用了「'+run.storybook.findLast(x=>x.id===`encore-${t.id}-2`)?.options?.[run.encore.choices[2]]+'」。':'主题尚未走完，尾声只保留实际读过的 '+run.encore.days.length+' 段，不补造剩余经历。'});}
+  for(const p of PEOPLE){const e=characterEnding(run,p.id);if(e){const entry=run.storybook.findLast(x=>x.id==='finale-'+p.id);out.push({title:e.title,text:entry.result});}}
   return out;
 }
