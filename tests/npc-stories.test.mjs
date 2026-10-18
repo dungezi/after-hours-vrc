@@ -235,6 +235,8 @@ test('ordinary group choices change existing NPC bonds as well as player trust a
 
 test('version three saves upgrade NPC bonds and preserve pending follow-up stories',()=>{
   const r=pairReady();beginPair(r);r.notice=null;advance(r,12);delete r.npcBonds['rei:yuki'].open;
+  // 旧版存档不可能包含新版生活消息。
+  r.queue=r.queue.filter(q=>!q.id?.startsWith('life-'));delete r.lives;delete r.encore;delete r.dailyPaths;
   const copy=validateSave({version:3,run:r,legacy:freshLegacy()});assert.equal(copy.version,VERSION);
   assert.equal(copy.run.npcBonds['rei:yuki'].open,false);assert.equal(copy.run.pending.id,'npc-date');
 });

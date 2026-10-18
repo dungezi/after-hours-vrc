@@ -1,3 +1,4 @@
+import { dailyAlternative } from './daily-branches.js';
 import { PEOPLE } from './data.js';
 import { LATER_DAILY } from './later-daily-stories.js';
 
@@ -107,8 +108,9 @@ export function dailyReady(run, scene) {
 }
 export function dailyScene(run,pending) {
   const s=DAILY.find(s=>s.id===pending.id);if(!s)return null;
-  const [title,text,a,b]=s.beat,previous=s.id.slice(0,-1)+(s.index-1);
-  const results=RESULTS[s.world || s.npc][s.index];
+  const alternative=dailyAlternative(run,s);
+  const [title,text,a,b]=alternative?[alternative[0],alternative[1],alternative[2],alternative[4]]:s.beat,previous=s.id.slice(0,-1)+(s.index-1);
+  const results=alternative?[alternative[3],alternative[5]]:RESULTS[s.world || s.npc][s.index];
   const echo=s.index>0 && run.storyFlags['choice:'+previous]===2?'上次你选择暂时搁下这件事。今天，对方重新留出了谈话的机会。\n\n':'';
   const adapted=s.id==='daily-world-cafe-3'?text.replace('昨天的误会已经说开',run.storyFlags['choice:'+previous]===2?'之前的误会还没有完全说开':'之前的误会已经说开'):text;
   return {id:s.id,npc:s.npc,title,subtitle:`${s.npc?PEOPLE.find(p=>p.id===s.npc).name+'的日常':'世界里的小故事'} · ${s.index+1} / 6`,text:echo+adapted,choices:[
