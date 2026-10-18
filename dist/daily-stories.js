@@ -100,7 +100,7 @@ for(const [key,beats] of Object.entries(LATER_DAILY)) {
   RESULTS[key].push(...beats.map(beat=>beat.slice(4)));
 }
 export function dailyReady(run, scene) {
-  if(run.storySeen.includes(scene.id) || run.day<1+scene.index*3)return false;
+  if(run.storySeen.includes(scene.id) || run.storyFlags['defer:'+scene.id]===run.day || run.day<1+scene.index*3)return false;
   if(scene.npc && (!run.relationships[scene.npc].introduced || run.relationships[scene.npc].meetings<scene.index+1))return false;
   const previous=scene.id.slice(0,-1)+(scene.index-1);
   return scene.index===0 || (run.storySeen.includes(previous) && run.day>=(run.storyFlags['read:'+previous] || 1)+2);
@@ -114,6 +114,6 @@ export function dailyScene(run,pending) {
   return {id:s.id,npc:s.npc,title,subtitle:`${s.npc?PEOPLE.find(p=>p.id===s.npc).name+'的日常':'世界里的小故事'} · ${s.index+1} / 6`,text:echo+adapted,choices:[
     {label:a,text:results[0],effects:{mood:2},rel:s.npc?{trust:3,affection:1}:{},outcome:'daily-read'},
     {label:b,text:results[1],effects:{balance:2},rel:s.npc?{trust:2,tension:-2}:{},outcome:'daily-read'},
-    {label:'今晚先搁下这件事',text:'这次没有继续往下谈。现实里的安排和各自的感受，仍然值得之后认真处理。',effects:{},rel:{},outcome:'daily-read'},
+    {label:'今晚先搁下这件事',text:'这次没有继续往下谈。现实里的安排和各自的感受，仍然值得之后认真处理。',effects:{},rel:{},outcome:'daily-defer'},
   ]};
 }

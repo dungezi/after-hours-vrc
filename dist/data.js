@@ -111,6 +111,8 @@ export const ARCS = {
 };
 
 export const SOURCES = [
+  { title: '中文玩家分享 · 入坑、设备与新朋友', url: 'https://blog.xuemeng.work/index.php/2026/05/25/vrc%E5%A4%AA%E5%A5%BD%E7%8E%A9%E5%95%A6%EF%BC%81%E5%BE%88%E5%B9%B8%E8%BF%90%E9%81%87%E5%88%B0%E4%BD%A0%E4%BB%AC%EF%BC%81/', note: '借鉴新人融入、设备差异与共同创作的生活主题；人物、对白和事件经过均另行原创。' },
+  { title: '中文玩家分享 · 深夜陪伴的感受', url: 'https://www.233leyuan.com/post-detail/2057725832293969920', note: '用于理解深夜陪伴与下线时的心情；没有改写原帖中的具体经历。' },
   { title: 'バーチャルライフマガジン · 砂糖文化介绍', url: 'https://vr-lifemagazine.com/osatou/', note: '关系期待因人而异；互相讨论边界与是否涉及现实。' },
   { title: '4Gamer · 作者的 VRChat 亲密关系经历', url: 'https://www.4gamer.net/games/794/G079439/20251224061/', note: '反复见面、空间距离与被陪伴的感受。仅借鉴主题，未改编具体人物或情节。' },
   { title: '虚拟学会 · 作为交流行为的「お砂糖」', url: 'https://www.jstage.jst.go.jp/article/vconf/2022/0/2022_147/_pdf/-char/ja', note: '亲密关系也可以从交流方式和关系协商的角度理解。' },

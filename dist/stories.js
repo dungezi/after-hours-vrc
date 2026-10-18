@@ -2,6 +2,7 @@ import { PEOPLE, WORLD } from './data.js';
 import { npcScene } from './npc-stories.js';
 import { courtshipScene } from './courtship-stories.js';
 import { DAILY, dailyScene } from './daily-stories.js';
+import { CIRCLE_SCENES, circleScene } from './circle-stories.js';
 import { initiativeScene } from './initiative-stories.js';
 import { PHOTO_STORIES, photoScene } from './photo-stories.js';
 import { SEPARATION_IDS, separationScene } from './separation-stories.js';
@@ -58,8 +59,9 @@ const CONFESS = {
   yuki: '弥生保存了工程，第一次没有用“还有一个报错”拖延谈话。“如果你说的是喜欢，我希望你看见的不只有这副模型，也有不知道该怎么回应的我。”',
 };
 
-export const SCENE_IDS = ['initiative','courtship','npc-prelude','introduction','conversation','date','solo','confession','reply','boundary','breakup','together','npc-confession','npc-boundaries','npc-network','npc-calendar','npc-date','npc-breakup','npc-departure','multi-open','multi-discovery','multi-time','multi-photo', ...GROUPS.map(g => g.id), ...DAILY.map(s=>s.id), ...PHOTO_STORIES.map(s=>s.id), ...SEPARATION_IDS];
+export const SCENE_IDS = ['initiative','courtship','npc-prelude','introduction','conversation','date','solo','confession','reply','boundary','breakup','together','npc-confession','npc-boundaries','npc-network','npc-calendar','npc-date','npc-breakup','npc-departure','multi-open','multi-discovery','multi-time','multi-photo', ...GROUPS.map(g => g.id), ...DAILY.map(s=>s.id), ...CIRCLE_SCENES.map(s=>s.id), ...PHOTO_STORIES.map(s=>s.id), ...SEPARATION_IDS];
 export function sceneFor(run, pending) {
+  if(pending.id.startsWith('circle-'))return circleScene(run,pending);
   if(SEPARATION_IDS.includes(pending.id))return separationScene(run,pending);
   if(pending.id.startsWith('photo-'))return photoScene(run,pending);
   if(pending.id==='initiative')return initiativeScene(run,pending);

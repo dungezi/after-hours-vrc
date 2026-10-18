@@ -26,13 +26,14 @@ test('72 daily scenes have distinct titles, branches and outcomes, and six-step 
   assert.equal(titles.size,72);assert.equal(outcomes.size,144);
 });
 
-test('world daily chapters do not repeat, wait across nights and preserve a deferred choice',()=>{
+test('deferred daily stories resume on a later night and never unlock an unread sequel',()=>{
   const r=fresh();r.pending={type:'scene',id:'daily-world-rain-0'};choose(r,2);
-  assert.equal(r.storyFlags['choice:daily-world-rain-0'],2);
+  assert.equal(r.storyFlags['defer:daily-world-rain-0'],1);
   const first=DAILY.find(s=>s.id==='daily-world-rain-0'),second=DAILY.find(s=>s.id==='daily-world-rain-1');
-  assert.equal(dailyReady(r,first),false);assert.equal(dailyReady(r,second),false);
-  r.day=4;assert.equal(dailyReady(r,second),true);r.pending={type:'scene',id:second.id};
-  assert.match(currentEvent(r).text,/上次你选择暂时搁下/);choose(r,0);
+  assert.equal(r.storySeen.includes(first.id),false);assert.equal(dailyReady(r,first),false);assert.equal(dailyReady(r,second),false);
+  r.day=4;assert.equal(dailyReady(r,first),true);assert.equal(dailyReady(r,second),false);
+  r.pending={type:'scene',id:first.id};choose(r,0);r.day=5;assert.equal(dailyReady(r,second),false);
+  r.day=6;assert.equal(dailyReady(r,second),true);r.pending={type:'scene',id:second.id};choose(r,0);
   assert.equal(dailyReady(r,second),false);assert.doesNotThrow(()=>validateSave(payload(r)));
 });
 

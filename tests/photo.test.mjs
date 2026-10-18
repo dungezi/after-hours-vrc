@@ -151,10 +151,10 @@ test('new daily fifth and sixth chapters cannot skip earlier chapters or their c
     const r=fresh();r.day=25;if(first.npc)Object.assign(r.relationships[first.npc],{met:true,introduced:true,meetings:10});
     assert.equal(dailyReady(r,first),false);
     for(let i=0;i<4;i++){const id=first.id.slice(0,-1)+i;r.storySeen.push(id);r.storyFlags['read:'+id]=i*3+1;}
-    assert.equal(dailyReady(r,first),true);r.pending={type:'scene',id:first.id,...(first.npc?{npc:first.npc}:{})};choose(r,2);drain(r);
+    assert.equal(dailyReady(r,first),true);r.pending={type:'scene',id:first.id,...(first.npc?{npc:first.npc}:{})};choose(r,0);drain(r);
     const last=DAILY.find(s=>s.id===first.id.slice(0,-1)+'5');assert.equal(dailyReady(r,last),false);
     r.day=27;assert.equal(dailyReady(r,last),true);r.pending={type:'scene',id:last.id,...(last.npc?{npc:last.npc}:{})};
-    assert.match(currentEvent(r).text,/上次你选择暂时搁下/);choose(r,0);drain(r);assert.equal(dailyReady(r,last),false);
+    choose(r,0);drain(r);assert.equal(dailyReady(r,last),false);
     assert.doesNotThrow(()=>validateSave(payload(r)));
   }
 });
