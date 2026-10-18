@@ -1,3 +1,4 @@
+import { arcReply } from './character-voices.js';
 import { PEOPLE, EVENTS, ARCS } from './data.js';
 import { departureContactReason } from './separation-stories.js';
 const person=id=>PEOPLE.find(p=>p.id===id);
@@ -36,7 +37,7 @@ const ARCS_LATER={
 export function arcScene(run,npc,index){
  const base=ARCS[npc]?.[index];if(!base)return null;if(index===0)return base;
  const root=run.storyFlags[`choice:arc:${npc}:0`];if(![0,1,2].includes(root))return base;
- const [title,text,labels]=ARCS_LATER[npc][root];return {title,text,choices:labels.map((label,i)=>({label,text:i===0?'这次选择被认真说清，也留下了仍要实际做到的部分。后续关系不会因为一次谈话自动确认。':'两个人都说出了自己的需要；没有把不同的愿望排成谁更在意谁。',effects:i===0?{social:2,energy:-2}:{balance:2,mood:-1},rel:i===0?{trust:7,affection:3}:{trust:6,tension:-3},flags:npc==='ash'?{friendship:true}:{}}))};
+ const [title,text,labels]=ARCS_LATER[npc][root];return {title,text,choices:labels.map((label,i)=>({label,text:arcReply(npc,root,i),effects:i===0?{social:2,energy:-2}:{balance:2,mood:-1},rel:i===0?{trust:7,affection:3}:{trust:6,tension:-3},flags:npc==='ash'?{friendship:true}:{}}))};
 }
 // Every original world incident has three authored consequences, selected by the actual earlier decision.
 const AFTER={
@@ -56,7 +57,24 @@ const AFTER={
  alone:['灰色列表后的新发现',['你独自走过的小路后来想起一个新问题。下次见朋友时，可以分享经历，也可以把一部分留给自己。','独自完成的配色有了自己的节奏。这次朋友上线，你不必把那晚说成无聊的等待。','你把一个晚上留给现实的朋友。这次回来，有人想听近况，你也仍然需要两个世界各自的时间。'],'分享一件自己愿意讲的发现','先继续自己的安排，晚一点再约一个交集'],
  hostlesson:['散场后谁来收拾',['轮流分享让更多人说完了话，散场的清理却仍落到少数人身上。参与节目与承担收尾是两件事。','安静区域和出口真的被用到。这次有朋友想把聚会缩短，也有人希望继续。','那晚调高音乐后有人离开。这次活动前你听到那位朋友的感受，需要先修正被忽略的部分。'],'按愿意承担的范围分工，允许有人提前离开','缩小这次活动，先把能完成的部分做妥'],
 };
+const AFTER_REPLIES={
+ quiet:['雨音把自己的愿望说完，往雨棚里挪了一点。你们待到刚刚讲好的结束点，她这次没用沉默让你猜要不要走。','你讲起自己今晚也很想分享的事。雨音先听了一段，又说现在想安静一下；两种需要都有了具体的先后。'],
+ newbie:['新人这回自己试了机关，你们只在旁边交换错过的线索。阿澈没有再伸手替他按下每一个按钮。','你们交换了不同的发现，没有再给谁贴一个永远需要被带着走的名字。新人先提出了下一段想试的玩法。'],
+ stars:['零点把最想讲的那件小事讲完，结束提醒响起时真的说了晚安。没讲到的部分没有被临时塞进另一次日出。','你们各留了一段能异步读完的近况。这次没同时走过新的路线，具体见面仍需要另找交集。'],
+ dance:['凛跳了自己想跳的一段，你也选了愿意参与的部分。你们在走廊碰头时，各有一件对方刚才没看到的小事可讲。','那一首结束以后你真的离开人群，凛继续了自己的节目。谁也没用对方多留几首来计算今晚够不够重要。'],
+ distance:['小满自己把纸花挪到舒服的位置，又抬头问你这样坐好不好。这次距离是两个人具体确认的，没靠玩笑跳过。','你讲了自己的期待，也听见小满现在还不能接受的部分。纸花仍在长椅上，关系的名字没有被擅自写上去。'],
+ mesh:['你们只记下一个要验证的问题，其余先留在下一版。弥生终于没再把每条反馈都改成今晚必须修完的任务。','工程先保存了当前版本。弥生讲起自己最喜欢的那一层渐变，讲得比报错细节还久；这晚没有虚构一次新的上传成功。'],
+ orange:['你只留下这一次可拒绝的邀请，然后继续自己的安排。后来再看状态时，已经有一件今晚真正做过的事可以记下。','你回应了对方愿意分享的近况，没有继续追问那段私事。这个晚上没再新增一个必须见面的约定。'],
+ voice:['这次你用舒服的声音或文字说完一件小事。有人接住了话题，没有要求你每晚都保持完全相同的表达状态。','你先把今晚愿意怎样表达说清，然后按自己的节奏参与。没开麦的部分也没有被当作缺席。'],
+ rumor:['说明按当事人愿意公开的范围发出。那张照片没有被重新赋予一个还未确认的关系名字，更多私人话题也没被拿出来作证明。','你只纠正了不实称呼，随后结束这次围观。群里没有得到更多细节，当事人也不必靠公布私人对话才能让澄清成立。'],
+ budget:['你先用已有素材试了一轮，终于分清哪里真的缺用途、哪里只是暂时想买。验证没有再产生一笔默认已经付款的新消费。','新的愿望留在以后再看的位置，这晚只整理了手头的素材。预算没有神奇回满，没买的东西也没被假装不再喜欢。'],
+ morning:['最想听的一件事讲完以后，你们认真说了晚安。没听到的内容留给下一次，没有被写成这一夜已经全部续完。','你记下没讲完的话题，提前结束了这段聊天。那个话题仍然值得期待，也不用今晚继续熬着证明。'],
+ party:['原来的安排先被保留，新邀请没有偷偷占掉同一段时间。下一次要约在什么时候，仍等双方去日历里具体确认。','你先问了双方是否愿意一起参加，没有直接把两份邀请拼起来。这次询问本身不冒充已经确认的共同预约。'],
+ feedback:['你只验证了一个明确改动，原版也单独保存。两份结果并排放着，没有因为别人的不适就把自己的偏好全部删掉。','你把设计意图写清，说明这次愿意改与暂时不改的部分。回应不再只是删掉作品，也没要求所有人最后都喜欢同一种灯光。'],
+ alone:['你挑了一件愿意分享的发现，其他部分仍留给自己。这段独处有了实际的见闻，没有被讲成整晚只是等谁上线。','你先继续自己的安排，没有为了列表亮起来就立刻停下手里的事。晚一点是否见面，还可以再问。'],
+ hostlesson:['收尾按每个人愿意承担的范围重新分过，有人提前离开，有人只做一小段。留下的人也没有被默认负责整场活动的以后。','你们缩小了这次聚会，只完成能接住的部分。人数和音量没有被拿来掩盖那位朋友上次确实没被听见的感受。'],
+};
 export const WORLD_FOLLOWUPS=EVENTS.map(e=>({id:'after-'+e.id,event:e.id,npc:e.npc||null}));
 export function followupReady(run,q){const s=WORLD_FOLLOWUPS.find(s=>s.id===q.id);if(!s||s.npc!==(q.npc||null)||run.storySeen.includes(s.id))return false;const day=run.storyFlags['read:event:'+s.event];return Number.isInteger(day)&&run.day>=day+2&&[0,1,2].includes(run.storyFlags['choice:event:'+s.event])&&(!s.npc||run.relationships[s.npc].introduced&&!departureContactReason(run,s.npc));}
 export function followupMessages(run){return WORLD_FOLLOWUPS.filter(s=>followupReady(run,s)).map(s=>({type:'scene',id:s.id,...(s.npc?{npc:s.npc}:{}),optional:true}));}
-export function followupScene(run,q){const s=WORLD_FOLLOWUPS.find(s=>s.id===q.id);if(!s)return null;const [title,versions,...labels]=AFTER[s.event],root=run.storyFlags['choice:event:'+s.event];if(![0,1,2].includes(root))return null;return {title,subtitle:'世界故事 · 那次选择之后',...(s.npc?{npc:s.npc}:{}),text:versions[root]+'\n\n上次的选择已经发生，今晚可以继续做一个具体决定。',choices:labels.map((label,i)=>({label,text:i===0?'你把当下最在意的需要说具体，并承担这次选择占用的余力。另一种安排留到以后重新确认。':'你为尚未准备好的部分留了时间，也接受这次不会马上得到同样的共同体验。',effects:i===0?{energy:-3,social:2}:{balance:2,mood:-1},rel:s.npc?(i===0?{trust:3,affection:2}:{trust:2,tension:-2}):{},outcome:'world-followup-read'}))};}
+export function followupScene(run,q){const s=WORLD_FOLLOWUPS.find(s=>s.id===q.id);if(!s)return null;const [title,versions,...labels]=AFTER[s.event],root=run.storyFlags['choice:event:'+s.event];if(![0,1,2].includes(root))return null;return {title,subtitle:'世界故事 · 那次选择之后',...(s.npc?{npc:s.npc}:{}),text:versions[root]+'\n\n上次的选择已经发生，今晚可以继续做一个具体决定。',choices:labels.map((label,i)=>({label,text:AFTER_REPLIES[s.event][i],effects:i===0?{energy:-3,social:2}:{balance:2,mood:-1},rel:s.npc?(i===0?{trust:3,affection:2}:{trust:2,tension:-2}):{},outcome:'world-followup-read'}))};}

@@ -37,7 +37,7 @@ export const THEMES=[
 
 const theme=id=>THEMES.find(t=>t.id===id);
 export const ENCORE_SCENES=THEMES.flatMap(t=>[0,1,2].map(index=>({id:`encore-${t.id}-${index}`,theme:t.id,npc:t.cast[0],other:t.cast[1],index})));
-export const freshEncore=(route=null)=>({route,days:[],choices:[]});
+export const freshEncore=(route=null)=>({route,days:[],choices:[],detour:null});
 export function unlockedFromEndings(endings=[]) {
   const out=[];if(endings.length)out.push('quiet');
   for(const [ending,id] of [['creator','workshop'],['friends','gathering'],['sugar','letters'],['weave','letters'],['traveler','paths'],['goodbye','renewal']])if(endings.includes(ending))out.push(id);
@@ -61,9 +61,11 @@ export function encoreScene(run,q) {
   const [title,text]=t.steps[s.index],echo=s.index?`${t.branches[root][0]}\n\n`:'';
   const last=s.index===2?run.storybook.findLast(x=>x.id===`encore-${t.id}-1`):null;
   const progression=s.index===1?themeSecond(t,root):s.index===2?themeContinuation(t,run.encore.choices[1]):'';
+  const detour=s.index===2&&run.encore.detour?run.storybook.findLast(x=>x.id.startsWith('turn-')):null;
+  const detourText=detour?'你们后来还经历过「'+detour.title+'」。'+detour.result+'\n\n':'';
   const actual=last?`上一段实际选择的是「${last.options[last.choice]}」。\n\n`:'';
   const labels=s.index===0?t.plans:s.index===1?['先兑现原来最在意的部分，缩小这次范围','先和朋友调整做法，接受原定安排会改变','先各自完成一小段，再交换实际结果']:['把完成的部分留下，认真结束这一阶段','留一个明确的小续篇，重新询问谁愿意参加','分别收藏自己的版本，不要求统一纪念方式'];
-  return {id:s.id,npc:s.npc,other:s.other,title:s.index?`${title} · ${plan}`:title,subtitle:`本轮主题 · ${t.name} · ${s.index+1} / 3`,text:'这条主题线属于本轮的新旅程；不会继承上局关系，也不会替角色确认心意。\n\n'+echo+actual+text+'\n\n'+progression+(s.index===2?'\n\n'+t.branches[root][1]:''),choices:labels.map((label,i)=>({label,text:s.index===2?themeRoute(t,[root,run.encore.choices[1],i]).text:s.index===0?`你们采用「${label}」作为这轮的起点，另外两种安排暂时不做。`:s.index===1?i===0?'你们先做完原来最想留下的一部分，其余内容清楚写到以后，没有把它们说成已经完成。':i===1?'调整得到各方确认，原来的期待也重新说了一遍。下一段会记住这次实际采用的做法。':'大家分头做完一小段，回来讲的都是真正发生的事，没有人替别人补出缺席的经历。':i===0?'这一阶段到这里认真结束。记录留下来，没有附带必须马上参加下一轮的义务。':i===1?'你们另写了一份小邀请，谁愿意接续需要重新回答，过去的参加不代替新的同意。':'你们保留了各自的纪念方式，没有把统一的合照或公开记录当作共同经历唯一的证据。',effects:i===0?{mood:2,energy:-3}:i===1?{social:1,balance:-2}:{balance:2,mood:-1},rel:{trust:2},otherRel:{trust:2},npcLinkDelta:1,pairEffects:{trust:1,tension:-1},outcome:'encore-read'}))};
+  return {id:s.id,npc:s.npc,other:s.other,title:s.index?`${title} · ${plan}`:title,subtitle:`本轮主题 · ${t.name} · ${s.index+1} / 3`,text:'这条主题线属于本轮的新旅程；不会继承上局关系，也不会替角色确认心意。\n\n'+echo+actual+detourText+text+'\n\n'+progression+(s.index===2?'\n\n'+t.branches[root][1]:''),choices:labels.map((label,i)=>({label,text:s.index===2?themeRoute(t,[root,run.encore.choices[1],i]).text:s.index===0?`你们采用「${label}」作为这轮的起点，另外两种安排暂时不做。`:s.index===1?i===0?'你们先做完原来最想留下的一部分，其余内容清楚写到以后，没有把它们说成已经完成。':i===1?'调整得到各方确认，原来的期待也重新说了一遍。下一段会记住这次实际采用的做法。':'大家分头做完一小段，回来讲的都是真正发生的事，没有人替别人补出缺席的经历。':i===0?'这一阶段到这里认真结束。记录留下来，没有附带必须马上参加下一轮的义务。':i===1?'你们另写了一份小邀请，谁愿意接续需要重新回答，过去的参加不代替新的同意。':'你们保留了各自的纪念方式，没有把统一的合照或公开记录当作共同经历唯一的证据。',effects:i===0?{mood:2,energy:-3}:i===1?{social:1,balance:-2}:{balance:2,mood:-1},rel:{trust:2},otherRel:{trust:2},npcLinkDelta:1,pairEffects:{trust:1,tension:-1},outcome:'encore-read'}))};
 }
 export function validEncore(run,legacy) {
   const e=run.encore;if(!e||!(e.route===null||theme(e.route)&&legacy.themesUnlocked.includes(e.route))||!Array.isArray(e.days)||!Array.isArray(e.choices)||e.days.length>3||e.days.length!==e.choices.length||e.route===null&&e.days.length)return false;

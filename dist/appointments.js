@@ -1,3 +1,4 @@
+import { applyAppointmentChapter, rememberAppointment, validMemento } from './appointment-chapters.js';
 import { PEOPLE, WORLD } from './data.js';
 import { departureContactReason } from './separation-stories.js';
 
@@ -16,7 +17,7 @@ export function proposeAppointment(run,{npc,day,slot,world:place,kind='walk'}){
   if(!run.relationships[npc]?.introduced||departureContactReason(run,npc))throw new Error('先认识对方，并尊重现在的联系范围。');
   if(!world(place)||!MEET_KINDS[kind]||!Number.isInteger(day)||day<run.day||day>28||!Number.isInteger(slot)||slot<1||slot>3||(day===run.day&&slot<=run.nightActions))throw new Error('请选择本轮尚未经过的夜晚和行动时段。');
   if(!person(npc).available.includes(day%7))throw new Error('对方这晚原本离线，换一个共同方便的夜晚。');
-  if(run.appointments.length>=24)throw new Error('本轮最多保留 24 份预约，请先完成已有安排。');
+  if(run.appointments.length>=24)throw new Error('本轮累计最多记录 24 份预约，完成或取消的记录也会保留。仍可现在聊天与相处。');
   if(run.appointments.some(a=>active(a)&&a.cast.includes(npc)&&at(a,day,slot)))throw new Error('已经和对方约了这个时段，不必重复预约。');
   const a={id:'a'+(run.appointments.length+1),cast:[npc],day,slot,world:place,kind,status:'proposed',created:run.day,changes:0,resolved:false,history:[]};
   add(a,run,'propose');run.appointments.push(a);run.pending={type:'scene',id:'appointment-plan',npc,booking:a.id};return a;
@@ -76,11 +77,11 @@ export function appointmentScene(run,q){
     option('先听对方这次具体在意什么，不马上许下新约','你们把这次没有兑现的部分讲清楚。道歉没有自动生成另一个承诺。','resolve',{trust:1}),
   ]};
   const photo=a.kind==='photo',create=a.kind==='create';
-  return {npc,...(a.cast[1]?{other:a.cast[1]}:{}),title:`在约好的${place}见面`,subtitle:'赴约 · '+names,text:`你用了${time}这一段行动，含前往${place}，${names}也按约抵达。\n\n${LINES[npc]}\n\n${photo?FRAMES[a.world]+'\n\n这次原本约了拍照，可以确认入镜，也可以共同改为只散步。':create?'你们约的是一起做一个小练习，作品不必当晚发布，也不会跳过正式项目的要求。':'你们可以沿原来的路线走，也可以各留一小段让不同偏好都被看见。'}`,choices:[
+  return applyAppointmentChapter(run,a,{npc,...(a.cast[1]?{other:a.cast[1]}:{}),title:`在约好的${place}见面`,subtitle:'赴约 · '+names,text:`你用了${time}这一段行动，含前往${place}，${names}也按约抵达。\n\n${LINES[npc]}\n\n${photo?FRAMES[a.world]+'\n\n这次原本约了拍照，可以确认入镜，也可以共同改为只散步。':create?'你们约的是一起做一个小练习，作品不必当晚发布，也不会跳过正式项目的要求。':'你们可以沿原来的路线走，也可以各留一小段让不同偏好都被看见。'}`,choices:[
     option(photo?'征得同意后留下这一次合照':create?'先帮对方完成最卡住的一小步':'先走对方最想去的那一段',photo?'拍摄方式与私人范围被再次确认，这张照片记录的是一次真的赴约。':create?'你们认真做完一小步，余下的练习仍留给各自继续。':'对方的期待真正排进了这段时间，你们也按约结束。','finish',{trust:3,affection:2},{...(a.cast[1]?{otherRel:{trust:2},npcLinkDelta:2,pairEffects:{trust:1,tension:-1}}:{}),meetMode:photo?'portrait':create?'support':'their',...(photo&&run.photoDay===run.day?{unavailable:'今晚已拍过照，可以共同改为散步'}:{})}),
     option(photo?'共同改为不拍照的散步':create?'各做一个版本，再交换具体发现':'也说出自己想看的地方，一起调整路线',photo?'双方重新确认这次只相处，不补造合照，也没有把改动当作背着对方改变承诺。':create?'两个版本都实际做过，你们听到了彼此的方法，没有把谁的作品替换成另一个人的。':'路线被共同改过，原先的期待也没有被假装已经全部完成。','finish',{trust:2,tension:-1},{meetMode:photo?'walk':create?'parallel':'shared'}),
     option('坦白状态不佳，商量缩短这次相处','你按约来了，也认真说明了现在能承担的范围。双方共同结束这一小段，没有靠勉强撑满证明在意。','finish',{trust:1},{meetMode:'short'}),
-  ]};
+  ]});
 }
 export function resolveAppointment(run,q,c){
   const a=run.appointments.find(a=>a.id===q.booking),answer=c.outcome.slice(12);let extra='';
@@ -104,7 +105,7 @@ export function resolveAppointment(run,q,c){
   }
   if(answer==='resolve')a.resolved=true;
   if(answer==='finish'){
-    a.status='completed';a.resolved=true;a.result=c.meetMode;add(a,run,'complete');
+    rememberAppointment(run,a,c);a.status='completed';a.resolved=true;a.result=c.meetMode;add(a,run,'complete');
     for(const id of a.cast){run.relationships[id].lastDay=run.day;const life=run.lives[id];if(a.kind==='create'&&c.meetMode==='support'&&life.plan){life.plan.support=Math.min(3,life.plan.support+1);if(life.plan.state==='paused'){life.plan.state='retrying';life.plan.due=run.day+3;}}}
     if(a.kind==='photo'&&c.meetMode==='portrait'){run.photoDay=run.day;run.photos.push({world:a.world,day:run.day,slot:run.nightActions,with:a.cast[0],companion:a.cast[0],title:'赴约留影 · '+world(a.world).name,caption:c.text,scope:'private',story:null,choice:null});}
   }
@@ -112,7 +113,7 @@ export function resolveAppointment(run,q,c){
 }
 export function validAppointments(run){
   if(!Array.isArray(run.appointments)||run.appointments.length>24)return false;
-  const valid=a=>a&&/^a\d+$/.test(a.id)&&Array.isArray(a.cast)&&a.cast.length>=1&&a.cast.length<=2&&new Set(a.cast).size===a.cast.length&&a.cast.every(id=>person(id)&&run.relationships[id].introduced)&&world(a.world)&&MEET_KINDS[a.kind]&&Number.isInteger(a.day)&&a.day>=1&&a.day<=28&&a.day>=a.created&&Number.isInteger(a.slot)&&a.slot>=1&&a.slot<=3&&Number.isInteger(a.created)&&a.created>=1&&a.created<=run.day&&['proposed','confirmed','changing','attending','missed','completed','cancelled'].includes(a.status)&&Number.isInteger(a.changes)&&a.changes>=0&&a.changes<=2&&typeof a.resolved==='boolean'&&Array.isArray(a.history)&&a.history.length<=14&&a.history.length>0&&a.history[0].kind==='propose'&&a.history.every((h,i)=>h&&Number.isInteger(h.day)&&h.day>=a.created&&h.day<=run.day&&(!i||h.day>=a.history[i-1].day)&&['propose','confirm','cancel','boundary-cancel','miss','npc-change','reschedule','merge','merge-request','complete'].includes(h.kind)&&Number.isInteger(h.when)&&h.when>=1&&h.when<=28&&[1,2,3].includes(h.slot))&&(!a.suggested||Number.isInteger(a.suggested.day)&&a.suggested.day>=run.day&&a.suggested.day<=28&&[1,2,3].includes(a.suggested.slot));
+  const valid=a=>a&&validMemento(a.memento)&&/^a\d+$/.test(a.id)&&Array.isArray(a.cast)&&a.cast.length>=1&&a.cast.length<=2&&new Set(a.cast).size===a.cast.length&&a.cast.every(id=>person(id)&&run.relationships[id].introduced)&&world(a.world)&&MEET_KINDS[a.kind]&&Number.isInteger(a.day)&&a.day>=1&&a.day<=28&&a.day>=a.created&&Number.isInteger(a.slot)&&a.slot>=1&&a.slot<=3&&Number.isInteger(a.created)&&a.created>=1&&a.created<=run.day&&['proposed','confirmed','changing','attending','missed','completed','cancelled'].includes(a.status)&&Number.isInteger(a.changes)&&a.changes>=0&&a.changes<=2&&typeof a.resolved==='boolean'&&Array.isArray(a.history)&&a.history.length<=14&&a.history.length>0&&a.history[0].kind==='propose'&&a.history.every((h,i)=>h&&Number.isInteger(h.day)&&h.day>=a.created&&h.day<=run.day&&(!i||h.day>=a.history[i-1].day)&&['propose','confirm','cancel','boundary-cancel','miss','npc-change','reschedule','merge','merge-request','complete'].includes(h.kind)&&Number.isInteger(h.when)&&h.when>=1&&h.when<=28&&[1,2,3].includes(h.slot))&&(!a.suggested||Number.isInteger(a.suggested.day)&&a.suggested.day>=run.day&&a.suggested.day<=28&&[1,2,3].includes(a.suggested.slot));
   if(!run.appointments.every(valid))return false;
   if(run.appointments.some(a=>a.status==='completed'&&(!a.resolved||!a.history.some(h=>h.kind==='complete'))||a.status==='missed'&&!a.history.some(h=>h.kind==='miss')||['confirmed','attending','completed'].includes(a.status)&&a.cast.some(id=>!person(id)?.available.includes(a.day%7))))return false;
   if(new Set(run.appointments.map(a=>a.id)).size!==run.appointments.length)return false;

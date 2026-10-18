@@ -1,3 +1,4 @@
+import { TURN_SCENES, turnScene } from './theme-turns.js';
 import { APPOINTMENT_IDS, appointmentScene } from './appointments.js';
 import { WORLD_FOLLOWUPS, followupScene } from './plot-branches.js';
 import { FINALES, finaleScene } from './finale-stories.js';
@@ -65,8 +66,9 @@ const CONFESS = {
   yuki: '弥生保存了工程，第一次没有用“还有一个报错”拖延谈话。“如果你说的是喜欢，我希望你看见的不只有这副模型，也有不知道该怎么回应的我。”',
 };
 
-export const SCENE_IDS = ['initiative','courtship','npc-prelude','introduction','conversation','date','solo','confession','reply','boundary','breakup','together','npc-confession','npc-boundaries','npc-network','npc-calendar','npc-date','npc-breakup','npc-departure','multi-open','multi-discovery','multi-time','multi-photo', ...GROUPS.map(g => g.id), ...DAILY.map(s=>s.id), ...CIRCLE_SCENES.map(s=>s.id), ...PHOTO_STORIES.map(s=>s.id), ...SEPARATION_IDS, ...APPOINTMENT_IDS, ...WORLD_FOLLOWUPS.map(s=>s.id), ...FINALES.map(s=>s.id), LIFE_CHANGE_ID, ...LIFE_SCENES.map(s=>s.id), ...ENCORE_SCENES.map(s=>s.id)];
+export const SCENE_IDS = ['initiative','courtship','npc-prelude','introduction','conversation','date','solo','confession','reply','boundary','breakup','together','npc-confession','npc-boundaries','npc-network','npc-calendar','npc-date','npc-breakup','npc-departure','multi-open','multi-discovery','multi-time','multi-photo', ...GROUPS.map(g => g.id), ...DAILY.map(s=>s.id), ...CIRCLE_SCENES.map(s=>s.id), ...PHOTO_STORIES.map(s=>s.id), ...SEPARATION_IDS, ...APPOINTMENT_IDS, ...TURN_SCENES.map(s=>s.id), ...WORLD_FOLLOWUPS.map(s=>s.id), ...FINALES.map(s=>s.id), LIFE_CHANGE_ID, ...LIFE_SCENES.map(s=>s.id), ...ENCORE_SCENES.map(s=>s.id)];
 export function sceneFor(run, pending) {
+  if(pending.id.startsWith('turn-'))return turnScene(run,pending);
   if(APPOINTMENT_IDS.includes(pending.id))return appointmentScene(run,pending);
   if(pending.id.startsWith('after-'))return followupScene(run,pending);
   if(pending.id.startsWith('finale-'))return finaleScene(run,pending);

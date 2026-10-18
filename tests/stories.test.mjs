@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { PEOPLE } from '../dist/data.js';
 import { romanceKey } from '../dist/courtship-stories.js';
 import { GROUPS } from '../dist/stories.js';
-import { VERSION, startRun, freshLegacy, perform, choose, currentEvent, locationOf, online, actionReason, previewEffects, previewRelations, apply, validateSave, finish } from '../dist/engine.js';
+import { VERSION, startRun, freshLegacy, perform, choose, currentEvent, locationOf, online, actionReason, previewEffects, previewRelations, apply, validateSave, finish, availableMessages, readMessage } from '../dist/engine.js';
 
 const run = () => { const r=startRun({ seed:42 });read(r);return r; };
 function read(r) { let guard=0; while(r.pending) { assert.ok(++guard<20);choose(r,0); } }
@@ -25,10 +25,10 @@ test('new contacts appear before same-action group stories, with both surviving 
   const r=run();r.day=4;
   perform(r,'explore',locationOf(r,'rei'));
   assert.equal(r.pending.id,'introduction');assert.equal(r.pending.npc,'rei');
-  const followup={...r.queue[0]};assert.equal(followup.id,'group-welcome');
+  const followup=r.queue.find(q=>q.id==='group-welcome');assert.equal(followup.optional,true);
   const restored=validateSave({version:VERSION,run:r,legacy:freshLegacy()}).run;
-  choose(restored,0);assert.deepEqual(restored.pending,followup);assert.equal(restored.ap,2);
-  choose(restored,0);assert.equal(restored.pending,null);
+  choose(restored,0);assert.equal(restored.relationships.rei.introduced,true);assert.equal(restored.ap,2);read(restored);
+  const message=availableMessages(restored).find(m=>m.title===currentEvent({...restored,pending:followup}).title);assert.ok(message);readMessage(restored,message.index);choose(restored,0);assert.equal(restored.ap,2);
   assert.equal(restored.logs.filter(l=>l.kind==='story'&&l.title==='来自另一个时区的问候').length,1);
 });
 

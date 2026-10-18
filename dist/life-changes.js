@@ -1,3 +1,4 @@
+import { lifeChangeVoice } from './character-voices.js';
 import { PEOPLE } from './data.js';
 import { departureContactReason } from './separation-stories.js';
 const OFFSETS=[3,10,19];
@@ -5,7 +6,7 @@ const p=id=>PEOPLE.find(x=>x.id===id);
 export const LIFE_CHANGE_ID='life-change';
 const OBSTACLES={raina:['写不下去的那一页','雨音重新走过那条路，却发现自己写不出想留下的部分。她承认这次没能按原计划写完，暂时不想用一篇漂亮空话交差。'],ash:['小队的时间没有对上','阿澈与伙伴各有真正想玩的安排，集合时间没能重叠。他没有把自己重新填成永远待命的向导，这一次的挑战也因此晚了。'],mika:['记录没得到所有人的同意','小满想留下的一段记录，有当事人暂时不愿意被写进去。她收起了那一部分，原本准备好的整页也需要重新安排。'],rei:['两种设备给了相反结果','零点的测试在一台设备上通过，另一台上却又有问题。合作的朋友还要处理自己的工程，没有谁能立刻腾出整个晚上来救火。'],lin:['两场排练撞在同一晚','凛想参加的排练与伙伴的安排撞了时间。双方都没有故意失约，也都不愿总是让自己的计划排到最后。她决定先重新排这一段。'],yuki:['又飞回起点的一次测试','弥生的预览再次失败，原来的修法只解决了其中一半。她把这次失败保留下来，承认今晚还没有办法直接宣布做完。']};
 export function freshPlan(anchor,seed=0,index=0,milestones=[],now=anchor){return {temper:(seed+index*3)%5,state:milestones.length===3?'finished':'working',due:milestones.length===3?0:Math.max(now+1,anchor+OFFSETS[milestones.length]),attempts:0,support:0,events:[]};}
-function event(life,run,kind,title,text,related=null){const e={day:run.day,kind,title,text,related,seen:false};if(life.plan.events.length<8)life.plan.events.push(e);return e;}
+function event(life,run,kind,title,text,related=null){const id=Object.keys(run.lives).find(id=>run.lives[id]===life);const e={day:run.day,kind,title,text:text+'\n\n'+lifeChangeVoice(id,kind),related,seen:false};if(life.plan.events.length<8)life.plan.events.push(e);return e;}
 export function advancePlan(run,id,life,friend){
   const plan=life.plan,index=life.milestones.length;if(index>=3||!plan.due||run.day<plan.due)return null;
   const report=(kind,title,text)=>{event(life,run,kind,title,text,friend);return {change:true,kind,title,related:friend};};

@@ -1,3 +1,5 @@
+import { validMemento } from './appointment-chapters.js';
+import { validLetters } from './wrapup.js';
 import { themeRoute } from './theme-branches.js';
 import { characterEnding } from './finale-stories.js';
 import { LIFE_PLANS, REDUCED } from './life-stories.js';
@@ -10,7 +12,7 @@ import { departureContactReason, departureSummary } from './separation-stories.j
 
 const person=id=>PEOPLE.find(p=>p.id===id);
 export function captureStory(run,event,pending,choice,index,result,changes) {
-  run.storybook.push({day:run.day,world:run.world,id:pending.id || `arc:${pending.npc}:${pending.index}`,cast:[event.npc,event.other].filter(Boolean),title:event.title,subtitle:event.subtitle || '',text:event.text,options:event.choices.map(c=>c.label),choice:index,result,changes:structuredClone(changes),partial:false});
+  run.storybook.push({day:run.day,world:run.world,id:pending.id || `arc:${pending.npc}:${pending.index}`,cast:[...new Set(event.cast||[event.npc,event.other].filter(Boolean))],title:event.title,subtitle:event.subtitle || '',text:event.text,options:event.choices.map(c=>c.label),choice:index,result,changes:structuredClone(changes),partial:false});
 }
 export function upgradeReading(payload) {
   const r=payload.run,l=payload.legacy;
@@ -25,7 +27,7 @@ export function validBook(book,day=28) {
 }
 export function validReading(payload) {
   const l=payload.legacy;
-  return typeof l.showEffects==='boolean'&&Array.isArray(l.introductions)&&l.introductions.length<=6&&new Set(l.introductions).size===l.introductions.length&&l.introductions.every(id=>person(id))&&Array.isArray(l.books)&&l.books.length<=3&&l.books.every(b=>b&&str(b.name,20)&&str(b.ending,80)&&finite(b.day,1,28)&&validBook(b.stories,b.day)&&Array.isArray(b.epilogue)&&b.epilogue.length<=30&&b.epilogue.every(e=>e&&str(e.title,500)&&str(e.text,8000)))&&(!payload.run||validBook(payload.run.storybook,payload.run.day));
+  return typeof l.showEffects==='boolean'&&Array.isArray(l.introductions)&&l.introductions.length<=6&&new Set(l.introductions).size===l.introductions.length&&l.introductions.every(id=>person(id))&&Array.isArray(l.books)&&l.books.length<=3&&l.books.every(b=>b&&str(b.name,20)&&str(b.ending,80)&&finite(b.day,1,28)&&validBook(b.stories,b.day)&&validLetters(b.letters,b.day)&&Array.isArray(b.keepsakes)&&b.keepsakes.length<=24&&b.keepsakes.every(x=>x&&validMemento(x)&&x.day<=b.day)&&Array.isArray(b.review)&&b.review.length<=4&&b.review.every(x=>x&&str(x.title,100)&&str(x.text,3000))&&Array.isArray(b.epilogue)&&b.epilogue.length<=30&&b.epilogue.every(e=>e&&str(e.title,500)&&str(e.text,8000)))&&(!payload.run||validBook(payload.run.storybook,payload.run.day));
 }
 
 export function storyHints(run,npc=null) {

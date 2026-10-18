@@ -1,3 +1,7 @@
+import { TURN_SCENES, turnReady, turnMessages, resolveTurn, validTurn } from './theme-turns.js';
+import { SMALL_TALK } from './character-voices.js';
+import { endingReview, closingLetters, validLetters } from './wrapup.js';
+import { freshLedger, relationChange, recordRelationGain, validLedger } from './relationship-rhythm.js';
 import { APPOINTMENT_IDS, appointmentReason, slotAppointments, tickAppointments, appointmentMessages, appointmentReady, resolveAppointment, validAppointments, npcChangeAppointments } from './appointments.js';
 import { freshReading, validReader, messageKey, messageCategory } from './reading.js';
 import { arcScene, WORLD_FOLLOWUPS, followupReady, followupMessages } from './plot-branches.js';
@@ -19,13 +23,13 @@ import { INITIATIVE } from './initiative-stories.js';
 import { PHOTO_STORIES, selectPhotoStory, validPhotoPending, photoFallback, photoModeFor } from './photo-stories.js';
 import { SEPARATION_IDS, departureKey, beginDeparture, departurePending, separationMatches, separationReady, advanceDeparture, validateDepartures, departureContactReason } from './separation-stories.js';
 
-export const VERSION = 11;
+export const VERSION = 12;
 export const DAYS = 28;
 export const STAT_NAMES = { energy: '精力', mood: '心情', craft: '制作', social: '社交', balance: '现实平衡', money: '资金' };
 export const REL_NAMES = { affection: '亲密', trust: '信任', tension: '压力' };
 const clamp = (n, max = 100) => Math.min(max, Math.max(0, n));
 const byId = (arr, id) => arr.find(x => x.id === id);
-export function freshLegacy() { return { runs: 0, points: 0, unlocked: [], equipped: [], achievements: [], endings: [], history: [], books: [], introductions: [], showEffects: false, themesUnlocked: [], themesCompleted: [], themeRoutes:[], characterEndings:[], reading:freshReading() }; }
+export function freshLegacy() { return { runs: 0, points: 0, unlocked: [], equipped: [], achievements: [], endings: [], history: [], books: [], introductions: [], showEffects: false, guide:true, themesUnlocked: [], themesCompleted: [], themeRoutes:[], characterEndings:[], detours:[], reading:freshReading() }; }
 export function random(run) {
   run.seed = (Math.imul(1664525, run.seed) + 1013904223) >>> 0;
   return run.seed / 4294967296;
@@ -46,7 +50,7 @@ export function previewEffects(run, effects = {}) {
   return Object.fromEntries(Object.entries(effects).map(([key, value]) => {
     const before = run.stats[key];
     let n = value;
-    if (n > 0 && ['craft','social'].includes(key) && before > 40) n = Math.max(1, Math.round(n * (100 - before) / 60));
+    if (n > 0 && ['craft','social'].includes(key) && before > 40) n = Math.floor(n * (100 - before) / 60);
     if (n > 0 && key === 'mood' && before > 70) n = Math.max(1, Math.round(n * 0.35));
     return [key, clamp(before + n, key === 'money' ? 99999 : 100) - before];
   }));
@@ -55,15 +59,7 @@ export function explorationEffects(run, world) {
   const w = byId(WORLD, world), isNew = !run.visited.includes(world);
   return { ...previewEffects(run, { mood: w.mood + (has(run,'map')?1:0) + (isNew && has(run,'wanderer')?2:0), social: w.social + (world==='club' && has(run,'tracker')?2:0), craft: w.craft }), energy: -actionCost(run,'explore',world).energy, balance: -actionCost(run,'explore',world).balance };
 }
-export function previewRelations(run, npc, effects = {}) {
-  if (!npc || !run.relationships[npc]) return {};
-  const r=run.relationships[npc];
-  return Object.fromEntries(Object.entries(effects || {}).map(([key,n])=>{
-    const before=r[key];
-    const gain=n>0 && key!=='tension' && before>60 ? Math.max(1,Math.round(n*(100-before)/40)) : n;
-    return [key,clamp(before+gain)-before];
-  }));
-}
+export function previewRelations(run,npc,effects={},passive=false){return relationChange(run,npc,effects,passive);}
 export function startRun({ name = '旅人', traits = ['listener', 'wanderer'], device = 'desktop', legacy = freshLegacy(), seed = Date.now(), theme = null } = {}) {
   if(theme!==null && (!THEMES.some(t=>t.id===theme) || !legacy.themesUnlocked.includes(theme)))throw new Error('先完成对应旅程，解锁这个主题。');
   if (traits.length !== 2 || new Set(traits).size !== 2 || traits.some(id => !byId(TRAITS, id))) throw new Error('请选择两个不同的开局天赋。');
@@ -79,7 +75,7 @@ export function startRun({ name = '旅人', traits = ['listener', 'wanderer'], d
     day: 1, ap: 3, stats, world: 'rain', visited: [], gear: [], projects: { avatar: 0, world: 0, event: 0 },
     relationships: Object.fromEntries(PEOPLE.map(p => [p.id, { met: ['raina', 'ash'].includes(p.id), introduced:false, affection: 5, trust: 10, tension: 0, stage: 0, status: 'friend', meetings: 0, lastDay: 0, confessionDay: 0, communicated: false, drifted: false, intent: null, disclosed: true, agreement: false }])),
     seen: [], achievements: [], photos: [], departures: {}, logs: [], storybook: [], pending: null, eventDay: 0, photoDay: 0, ended: false, ending: null,
-    appointments: [],
+    appointments: [], letters:[], relationLedger:freshLedger(),
     dailyPaths: {}, lives:freshLives(1,Number(seed)>>>0), encore:freshEncore(theme),
     storySeen: [], storyFlags: {}, npcLinks: {}, npcBonds: {}, queue: [], notice: null, nightActions: 0, storyCount: 0, storyNight: 0,
     counters: { boundary: 0, actions: 0, gossip: false, friendship: false, dates: 0 }, dream: 'belong',
@@ -94,7 +90,7 @@ export function log(run, title, text, kind = 'action', changes = []) {
   run.logs.unshift({ day: run.day, title, text, kind, changes });
   run.logs = run.logs.slice(0, 180);
 }
-export function apply(run, effects = {}, npc, relEffects = {}) {
+export function apply(run, effects = {}, npc, relEffects = {}, passive=false) {
   const changes = [];
   for (const [key, n] of Object.entries(previewEffects(run, effects))) {
     if (!(key in run.stats)) continue;
@@ -104,12 +100,15 @@ export function apply(run, effects = {}, npc, relEffects = {}) {
   }
   if (npc && run.relationships[npc]) {
     const r = run.relationships[npc];
-    for (const [key, n] of Object.entries(relEffects)) {
+    const deltas=relationChange(run,npc,relEffects,passive);
+    for (const [key, n] of Object.entries(deltas)) {
       if (!(key in REL_NAMES)) continue;
-      const before = r[key]; const gain = n > 0 && key !== 'tension' && before > 60 ? Math.max(1, Math.round(n * (100-before) / 40)) : n; r[key] = clamp(before + gain);
+      const before = r[key]; r[key] = clamp(before + n);
       if (r[key] !== before) changes.push({ label: `${byId(PEOPLE, npc).name}·${REL_NAMES[key]}`, delta: r[key] - before });
     }
+    recordRelationGain(run,npc,deltas,passive);
   }
+
   return changes;
 }
 function has(run, id) { return run.traits.includes(id) || run.memories.includes(id) || run.gear.includes(id); }
@@ -202,6 +201,7 @@ function storyReady(run, q) {
   const group=q.type==='scene' && GROUPS.find(g=>g.id===q.id);
   const cast=group ? groupCast(group) : q.type==='scene' && (q.id==='courtship' || q.id==='together' || q.id.startsWith('npc-') || q.id.startsWith('multi-')) ? [q.npc,q.other].filter(Boolean) : [];
   if(q.type==='scene') {
+    if(q.id.startsWith('turn-'))return turnReady(run,q);
     if(q.id.startsWith('after-'))return followupReady(run,q);
     if(q.id.startsWith('finale-'))return finaleReady(run,q);
     if(APPOINTMENT_IDS.includes(q.id))return appointmentReady(run,q);
@@ -309,7 +309,7 @@ function scheduleInitiatives(run) {
   }
 }
 function scheduleNpcStories(run,witness) {
-  for(const q of [...appointmentMessages(run),...followupMessages(run),...finaleMessages(run),...changeMessages(run),...lifeMessages(run),...encoreMessages(run)])enqueue(run,q);
+  for(const q of [...appointmentMessages(run),...turnMessages(run),...followupMessages(run),...finaleMessages(run),...changeMessages(run),...lifeMessages(run),...encoreMessages(run)])enqueue(run,q);
   for(const p of PEOPLE) {
     const r=run.relationships[p.id], away=run.day-r.lastDay;
     if(r.status==='sugar' && isIntroduced(run,p.id) && (r.tension>=75 || (away>=6 && r.trust<30))) {
@@ -381,7 +381,7 @@ function trigger(run, npc, mode='explore') {
   const group=GROUPS.find(g=>groupReady(run,g) && !run.storySeen.includes(g.id) && groupCast(g).every(id=>isIntroduced(run,id) && !departureContactReason(run,id)) && g.cast.every(id=>online(run,id)));
   if (group && run.storyFlags.lastGroupDay!==run.day) {
     const q={type:'scene',id:group.id,npc:group.cast[0],other:group.cast[1]};
-    if(focused)enqueue(run,{...q,optional:true});else {run.pending=q;return;}
+    enqueue(run,{...q,optional:true});
   }
   const circle=circleFor(run,npc,mode);
   if(circle) {run.pending=circle;return;}
@@ -404,7 +404,7 @@ export function readMessage(run,index) {
   if(!run || run.ended || run.pending || run.notice)throw new Error('先回应眼前的故事。');
   const q=run.queue[index];
   if(!Number.isInteger(index) || !q?.optional || (q.dueDay||0)>run.day || !storyReady(run,q))throw new Error('这段消息还需要前置经历或合适的时间。');
-  run.pending=run.queue.splice(index,1)[0];delete run.pending.optional;
+  run.pending=run.queue.splice(index,1)[0];run.pending.fromInbox=true;delete run.pending.optional;
 }
 export function availableMessages(run) {
   return run.queue.map((q,index)=>({q,index})).filter(({q})=>q.optional && (q.dueDay||0)<=run.day && storyReady(run,q)).map(({q,index})=>({index,key:messageKey(q),category:messageCategory(q),npc:q.npc,title:sceneFor(run,q)?.title || '朋友发来的近况'}));
@@ -498,15 +498,7 @@ export function perform(run, type, target) {
       rel = { trust: 6 + bonus, affection: 4, tension: -2 };
       effects.mood = 2; effects.social = 1;
       title = `聊天 · ${p.name}`;
-      const lines = {
-        raina: ['你们分享了收藏夹里的雨天世界。TA 把最喜欢的那个链接发给了你。', '你问起 TA 最近的生活，然后认真听完，没有急着给建议。'],
-        ash: ['你们聊起今天遇见的新人。阿澈笑着说：“谢谢你也记得来问问我。”', '咖啡杯永远不会空，话题却不必永远热闹。你们聊了些耳机之外的小事。'],
-        mika: ['小满给你看了一张新的截图。你记住了 TA 说喜欢的颜色。', '你们约好了下次一起去花园，而不只是说一句“有空再约”。'],
-        rei: ['你们交换了各自窗外的天气。地球转着，聊天窗口成了短暂的交点。', '零点介绍了新做的脚本，你分享了一个还没实现的世界点子。'],
-        lin: ['凛分享了一首没有公开播放过的歌。你问起 TA 最喜欢的那一小段。', '你们聊了除了舞蹈之外的事情。TA 今天不是主持人，只是一个朋友。'],
-        yuki: ['你们聊起穿模与报错。弥生顺手画了一张小小的材质笔记。', '你具体说起作品里喜欢的细节。TA 开心地解释起那几层灯光。'],
-      };
-      text = lines[npc][Math.floor(random(run) * 2)];
+      const count=run.storyFlags['smalltalk:'+npc]||0;text=SMALL_TALK[npc][count%SMALL_TALK[npc].length];run.storyFlags['smalltalk:'+npc]=count+1;run.storyFlags['guide:talk']=true;
       if (repeated) { rel.affection = 2; rel.trust = 3 + bonus; text += ' 今晚已经见过面，熟悉的聊天没有第一次那么多新鲜感。'; }
     }
     if (type === 'date') {
@@ -587,16 +579,16 @@ export function choose(run, index) {
   if(c.unavailable)throw new Error(c.unavailable);
   if (c.effects?.money && run.stats.money+c.effects.money<0) throw new Error('这个选择需要更多资金。');
   const p=run.pending, rel=p.npc?run.relationships[p.npc]:null;
-  const changes=apply(run,c.effects,event.npc,c.rel);
+  const changes=apply(run,c.effects,event.npc,c.rel,p.fromInbox===true);
   const deferred=c.outcome==='daily-defer';
   if (c.otherRel && event.other) {
-    changes.push(...apply(run,{},event.other,c.otherRel));
+    changes.push(...apply(run,{},event.other,c.otherRel,p.fromInbox===true));
     const key=pairKey(event.npc,event.other);
     const before=run.npcLinks[key] || 0,delta=c.npcLinkDelta ?? (c.otherRel.trust<0 || c.otherRel.tension>0?-4:4);
     run.npcLinks[key]=clamp(before+delta);
     if(run.npcLinks[key]!==before)changes.push({label:`${byId(PEOPLE,event.npc).name}与${byId(PEOPLE,event.other).name}·熟悉度`,delta:run.npcLinks[key]-before});
   }
-  for(const [id,effects] of Object.entries(c.castRel || {}))changes.push(...apply(run,{},id,effects));
+  for(const [id,effects] of Object.entries(c.castRel || {}))changes.push(...apply(run,{},id,effects,p.fromInbox===true));
   const affectBond=(a,b,effects)=>{
     const bond=run.npcBonds[pairKey(a,b)];if(!bond || bond.status!=='sugar')return;
     for(const [key,n] of Object.entries(effects || {})) {const before=bond[key];bond[key]=clamp(before+n);if(bond[key]!==before)changes.push({label:`${byId(PEOPLE,a).name}与${byId(PEOPLE,b).name}·${REL_NAMES[key]}`,delta:bond[key]-before});}
@@ -632,6 +624,7 @@ export function choose(run, index) {
   if(outcome==='finale-read'){run.storyFlags['finale-route:'+p.npc]=c.finaleRoute;run.storyFlags['choice:'+p.id]=index;}
   if(outcome==='life-change-read')resultText+=' '+resolveLifeChange(run,p,c);
   if(outcome==='life-read') {const life=run.lives[p.npc];life.read++;life.readDay=run.day;life.heard.push(run.day);if(c.lifePath!==null && life.milestones.length===life.read && life.read<3)life.path=c.lifePath;run.relationships[p.npc].lastDay=run.day;}
+  if(outcome==='theme-turn-read')resolveTurn(run,c,index);
   if(outcome==='encore-read') {run.encore.days.push(run.day);run.encore.choices.push(index);for(const id of [p.npc,p.other])run.relationships[id].lastDay=run.day;}
   if(outcome==='circle-read') {
     run.storyFlags['read:'+p.id]=run.day;run.storyFlags['choice:'+p.id]=index;run.storyFlags.lastCircleDay=run.day;
@@ -732,7 +725,7 @@ function nextDay(run) {
       if (away === 3) log(run, `${byId(PEOPLE, id).name}的未读消息`, '“最近都没见到你，想知道我们能不能约个时间？”亲密关系需要回应，也允许提前说明忙碌。', 'relationship');
     }
   }
-  run.day++; run.ap = 3;
+  run.day++; run.ap = 3;run.relationLedger=freshLedger(run.day);
   const recovery = nightRecovery(run);
   const changes = apply(run, { energy: recovery, mood: -4, balance: (run.nightActions<3?3:0) + (has(run,'steady')?2:0) });
   run.nightActions=0;run.storyNight=0;
@@ -758,18 +751,19 @@ export function finish(run) {
   let ending;
   if (run.stats.balance < 30) ending = { id: 'burnout', name: '先回到自己身边', subtitle: '有些灯，要先为自己点亮。', text: '你收获了不少夜晚，却也让现实的睡眠与生活落在身后。这不是失败，只是一段旅程提醒你：下次回来时，把自己也放进安排里。' };
   else if(Object.values(run.departures).some(d=>!d.other && d.resolution==='active'))ending={id:'fragile',name:'仍在练习的拥抱',subtitle:'关于是否继续，还有需要说完的话。',text:'关系变化已经被看见，但告别的前置或重新讨论还没走完。旅程结束不会替当事人宣布分开，也不会把未完成的调整说成已经解决。共同经历与目前的决定仍留在记录里。'};
-  else if (partners.length>=2 && partners.every(p=>run.relationships[p.id].agreement && run.relationships[p.id].trust>=50 && run.relationships[p.id].tension<=35) && run.stats.balance>=45) ending={id:'weave',name:'几条轨道，一起发光',subtitle:partners.map(p=>p.name).join('、')+'与你，共同确认各自的位置。',text:'你们没有让任何人替别人同意。公开范围、见面安排和退出权都被认真讨论，关系交织成为一份不断修订的约定。多段亲密没有复制时间，却让你们更清楚怎样共同承担承诺。'};
+  else if (partners.length>=2 && partners.every(p=>run.relationships[p.id].agreement && run.relationships[p.id].trust>=60 && run.relationships[p.id].tension<=35) ) ending={id:'weave',name:'几条轨道，一起发光',subtitle:partners.map(p=>p.name).join('、')+'与你，共同确认各自的位置。',text:'你们没有让任何人替别人同意。已确认的开放约定与目前的信任支持这段关系交织，具体见面仍需要每次实际安排。多段亲密没有复制时间，却让你们更清楚怎样共同承担承诺。'};
   else if (partners.length>=2) ending={id:'fragile',name:'仍在练习的拥抱',subtitle:'几份喜欢之间，还有没有说完的约定。',text:'你建立了不止一段亲密关系，但知情、共同接受、信任或时间安排仍留着缺口。下一段故事需要让每个人说清自己的愿望，也让自己认真承担能做到的承诺。'};
-  else if (stable && run.stats.balance >= 55) ending = { id: 'sugar', name: '两个人，各自发光', subtitle: `和${stable.name}一起，也把自己照顾好。`, text: `你和${stable.name}没有用全部时间证明亲密。聊清楚期待，给离线留余地，也为再次见面安排了一个可靠的时间。砂糖的甜，来自两个人都可以自由呼吸。` };
+  else if (stable) ending = { id: 'sugar', name: '两个人，各自发光', subtitle: `和${stable.name}继续相处，也照看各自的生活。`, text: `你和${stable.name}已经共同确认喜欢，目前的信任与相处压力支持继续。${run.appointments.some(a=>a.status==='completed'&&a.cast.includes(stable.id))?'真正赴过的约留在日历与共同记录里。':'往后的具体见面还需要重新安排，没有因为结算就自动填满日历。'}${run.stats.balance<60?'现实生活仍值得多留一点余地，稳定关系也需要照看各自的日常。':'以后仍可以继续讨论期待，也给各自的生活留出空间。'}` };
   else if (partners.length) ending = { id: 'fragile', name: '仍在练习的拥抱', subtitle: '喜欢是真的，相处仍然需要练习。', text: '你们为关系取了名字，也发现一个名字不能解决所有问题。下一段旅程，可以少一点猜测，多一点回应；少一点过大的承诺，多一点做得到的约定。' };
-  else if (completed.length >= 2) ending = { id: 'creator', name: '世界里，有你的一盏灯', subtitle: '你把想说的话，做成了可以回来的地方。', text: '一个 Avatar、一张地图、一场聚会。作品让陌生人有了新的相遇方式，朋友们也开始在你的世界里留下自己的故事。你找到了创作者的归属。' };
+  else if (completed.length >= 2) ending = { id: 'creator', name: '世界里，有你的一盏灯', subtitle: '你把想说的话，做成了可以回来的地方。', text: `你确实完成了${completed.map(p=>p.name).join('、')}。这些作品和活动拥有这一阶段真实留下的细节。还没完成的目标仍按原进度保留，创作者的归属也不要求一晚把清单全部打钩。` };
   else if (close.length >= 3 || run.counters.friendship) ending = { id: 'friends', name: '不止一种重要', subtitle: '没有官宣的夜晚，也能有稳稳的归属。', text: '你的好友列表不只是名字。你知道谁喜欢安静，谁需要舞台，谁不必及时回复。友谊不是等待恋爱的过渡，而是一种值得认真经营的关系。' };
   else if (Object.values(run.relationships).some(r => r.status === 'salt')) ending = { id: 'goodbye', name: '海盐留在风里', subtitle: '好好结束，也是一种真心。', text: '你们曾经相互靠近，也最终选择不同的方向。没有围观者的审判，没有把过去涂黑。那一段甜与咸都留在日记里，而你继续往前走。' };
   else if (run.visited.length === WORLD.length) ending = { id: 'traveler', name: '下一扇传送门', subtitle: '没有固定的目的地，也能有自己的轨道。', text: '你见过舞池与星空，也独自走过雨里的站台。归属有时不是停在某个人旁边，而是知道自己仍然愿意好奇，愿意走向下一片风景。' };
   else ending = { id: 'quiet', name: '一个普通的好晚上', subtitle: '没有传奇，也有值得记住的瞬间。', text: '你来过，聊过，留下几张截图。不是每段经历都要变成宏大的故事。熟悉的加载画面后，还有一个普通而温柔的晚上等着你。' };
   achievement(run, 'season');
   if (run.stats.balance >= 75) achievement(run, 'balance');
-  run.ending = ending; run.ended = true; return ending;
+  run.letters=closingLetters(run,availableMessages(run).map(m=>({q:run.queue[m.index],event:sceneFor(run,run.queue[m.index])})).filter(x=>x.event));
+  ending.review=endingReview(run);run.ending = ending; run.ended = true; return ending;
 }
 export function settle(run, legacy) {
   if (!run.ended) throw new Error('旅程还没有结束。');
@@ -782,8 +776,9 @@ export function settle(run, legacy) {
   legacy.history.unshift({ name: run.name, ending: run.ending.name, day: run.day, reward });
   legacy.history = legacy.history.slice(0, 30);
   unlockThemes(run,legacy);
+  if(run.encore.detour){const d=run.encore.detour;legacy.detours=[...new Set([...legacy.detours,[run.encore.route,d.variant,d.choice].join(':')])];}
   legacy.characterEndings=[...new Set([...legacy.characterEndings,...PEOPLE.map(p=>characterEnding(run,p.id)?.key).filter(Boolean)])];
-  legacy.books.unshift({name:run.name,ending:run.ending.name,day:run.day,stories:structuredClone(run.storybook),epilogue:epilogueFor(run)});legacy.books=legacy.books.slice(0,3);
+  legacy.books.unshift({name:run.name,ending:run.ending.name,day:run.day,stories:structuredClone(run.storybook),letters:structuredClone(run.letters),review:structuredClone(run.ending.review||[]),keepsakes:run.appointments.filter(a=>a.memento).map(a=>structuredClone(a.memento)),epilogue:epilogueFor(run)});legacy.books=legacy.books.slice(0,3);
   run.settled = true; run.reward = reward;
   return reward;
 }
@@ -806,7 +801,7 @@ export function validateSave(payload) {
   const finite = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
   const strings = (v, max = 200) => Array.isArray(v) && v.length <= max && v.every(x => typeof x === 'string' && x.length <= 300);
   const ids = (v, allowed, max = 100) => strings(v, max) && new Set(v).size === v.length && v.every(x => allowed.includes(x));
-  if (!payload || ![1,2,3,4,5,6,7,8,9,10,VERSION].includes(payload.version) || !payload.legacy) error();
+  if (!payload || ![1,2,3,4,5,6,7,8,9,10,11,VERSION].includes(payload.version) || !payload.legacy) error();
   payload=JSON.parse(JSON.stringify(payload));
   if (payload.version===1) {
     const old=payload.run;
@@ -891,15 +886,18 @@ export function validateSave(payload) {
     if(old){old.lives=freshLives(old.day,old.seed);old.encore=freshEncore();old.dailyPaths={};for(const s of DAILY.filter(s=>s.index===0 && old.storySeen?.includes(s.id)))old.dailyPaths[dailyLineKey(s)]=0;if(old.ended&&old.settled)unlockThemes(old,l);}
     payload.version=10;
   }
-  if(payload.version===10){payload.legacy.reading=freshReading();payload.legacy.themeRoutes=[];payload.legacy.characterEndings=[];if(payload.run){payload.run.appointments=[];PEOPLE.forEach((p,i)=>{const life=payload.run.lives[p.id];life.plan=freshPlan(life.anchor,payload.run.seed,i,life.milestones,payload.run.day);});}payload.version=VERSION;}
+  if(payload.version===10){payload.legacy.reading=freshReading();payload.legacy.themeRoutes=[];payload.legacy.characterEndings=[];if(payload.run){payload.run.appointments=[];PEOPLE.forEach((p,i)=>{const life=payload.run.lives[p.id];life.plan=freshPlan(life.anchor,payload.run.seed,i,life.milestones,payload.run.day);});}payload.version=11;}
+  if(payload.version===11){const r=payload.run;payload.legacy.detours=[];payload.legacy.reading.mode='calm';payload.legacy.guide=true;for(const b of payload.legacy.books){b.letters=[];b.review=[];b.keepsakes=[];}if(r){r.encore.detour=null;r.letters=[];r.relationLedger=freshLedger(r.day);if(r.ended){r.ending.review=endingReview(r);r.letters=closingLetters(r,(r.queue||[]).filter(q=>q.optional&&storyReady(r,q)).map(q=>({q,event:sceneFor(r,q)})).filter(x=>x.event));if(r.settled&&payload.legacy.books[0]){payload.legacy.books[0].letters=structuredClone(r.letters);payload.legacy.books[0].review=structuredClone(r.ending.review);}r.ending.legacy=true;}}payload.version=VERSION;}
   if(!validReading(payload) || !validThemeLegacy(payload.legacy))error();
   const l = payload.legacy;
+  if(typeof l.guide!=='boolean'||!Array.isArray(l.detours)||l.detours.length>36||new Set(l.detours).size!==l.detours.length||l.detours.some(key=>typeof key!=='string'||!THEMES.some(t=>t.id===key.split(':')[0])||!/^[a-z]+:[012]:[01]$/.test(key)))error();
   if(!validReader(l.reading)||!validThemeRoutes(l,THEMES)||!validCharacterEndings(l))error();
   if (!finite(l.points, 0, 999999) || !Number.isInteger(l.points) || !finite(l.runs, 0, 999999) || !Number.isInteger(l.runs)) error();
   if (!ids(l.unlocked, MEMORIES.map(x => x.id)) || !ids(l.equipped, l.unlocked, 3) || !ids(l.achievements, ACHIEVEMENTS.map(x => x.id)) || !ids(l.endings, ['burnout','sugar','fragile','creator','friends','goodbye','traveler','quiet','weave'])) error();
   if (!Array.isArray(l.history) || l.history.length > 30 || l.history.some(h => !h || typeof h.name !== 'string' || h.name.length > 20 || typeof h.ending !== 'string' || h.ending.length > 80 || !finite(h.day, 1, DAYS) || !finite(h.reward, 0, 30))) error();
   const r = payload.run;
   if (r) {
+    if(!validLedger(r)||!validLetters(r.letters,r.day)||!r.ended&&r.letters.length)error();
     if (typeof r.name !== 'string' || r.name.length > 20 || !Number.isInteger(r.day) || !finite(r.day, 1, DAYS) || !Number.isInteger(r.ap) || !finite(r.ap, 0, 3) || !finite(r.seed, 0, 4294967295) || !Number.isInteger(r.seed)) error();
     if (!ids(r.traits, TRAITS.map(x => x.id), 2) || r.traits.length !== 2 || !ids(r.memories, MEMORIES.map(x => x.id), 3) || !['desktop','vr'].includes(r.device)) error();
     for (const key of Object.keys(STAT_NAMES)) if (!finite(r.stats?.[key], 0, key === 'money' ? 99999 : 100)) error();
@@ -946,10 +944,10 @@ export function validateSave(payload) {
       if(b.initiator!==null && !route.cast.includes(b.initiator))error();
       if((b.status==='sugar' && (![1,2].includes(b.stage) || b.sinceDay<1 || b.initiator!==null)) || (b.status==='salt' && (b.stage!==3 || !b.initiator || b.sinceDay<1)) || (b.status==='friend' && ![0,3,4].includes(b.stage)))error();
     }
-    const validScene=q=>q && q.type==='scene' && SCENE_IDS.includes(q.id) && (!q.npc || !!byId(PEOPLE,q.npc)) && (!q.other || (!!byId(PEOPLE,q.other) && q.npc!==q.other)) && (!q.id.startsWith('multi-') || (q.npc && q.other)) && (q.id==='solo' || WORLD_FOLLOWUPS.some(s=>s.id===q.id&&!s.npc) || DAILY.some(s=>s.id===q.id && !s.npc) || PHOTO_STORIES.some(s=>s.id===q.id && !s.npc) || !!q.npc) && (q.index===undefined || (Number.isInteger(q.index) && finite(q.index,0,1))) && (q.dueDay===undefined || (Number.isInteger(q.dueDay) && finite(q.dueDay,1,DAYS+4))) && (q.optional===undefined || (q.optional===true && (q.id.startsWith('group-') || q.id.startsWith('life-') || q.id.startsWith('encore-') || q.id.startsWith('after-') || q.id.startsWith('finale-')))) && (q.id!=='reply' || (['accepted','waiting','rejected'].includes(q.answer) && !!r.relationships[q.npc]?.intent));
-    if(!validateDepartures(r) || !validateCircleHistory(r) || !validLives(r) || !validEncore(r,l) || !validAppointments(r))error();
+    const validScene=q=>q && q.type==='scene' && SCENE_IDS.includes(q.id) && (!q.npc || !!byId(PEOPLE,q.npc)) && (!q.other || (!!byId(PEOPLE,q.other) && q.npc!==q.other)) && (!q.id.startsWith('multi-') || (q.npc && q.other)) && (q.id==='solo' || WORLD_FOLLOWUPS.some(s=>s.id===q.id&&!s.npc) || DAILY.some(s=>s.id===q.id && !s.npc) || PHOTO_STORIES.some(s=>s.id===q.id && !s.npc) || !!q.npc) && (q.index===undefined || (Number.isInteger(q.index) && finite(q.index,0,1))) && (q.dueDay===undefined || (Number.isInteger(q.dueDay) && finite(q.dueDay,1,DAYS+4))) && (q.optional===undefined || (q.optional===true && (q.id.startsWith('group-') || q.id.startsWith('life-') || q.id.startsWith('encore-') || q.id.startsWith('after-') || q.id.startsWith('finale-') || q.id.startsWith('turn-')))) && (q.id!=='reply' || (['accepted','waiting','rejected'].includes(q.answer) && !!r.relationships[q.npc]?.intent));
+    if(!validateDepartures(r) || !validateCircleHistory(r) || !validLives(r) || !validEncore(r,l) || !validTurn(r) || !validAppointments(r))error();
     if(!r.dailyPaths || Array.isArray(r.dailyPaths) || Object.keys(r.dailyPaths).length>12 || Object.entries(r.dailyPaths).some(([key,path])=>!DAILY.some(s=>s.index===0 && dailyLineKey(s)===key && r.storySeen.includes(s.id) && (path===0 || (path===1 && r.storyFlags['choice:'+s.id]===1)))))error();
-    const validCast=q=>q.id.startsWith('after-') ? WORLD_FOLLOWUPS.some(s=>s.id===q.id&&s.npc===(q.npc||null)&&!q.other) : q.id.startsWith('finale-') ? FINALES.some(s=>s.id===q.id&&s.npc===q.npc&&!q.other) : q.id==='life-change' ? Number.isInteger(q.change)&&q.change>=0&&!!r.lives[q.npc]?.plan.events[q.change]&&!q.other : APPOINTMENT_IDS.includes(q.id) ? appointmentReady(r,q) : q.id.startsWith('life-') ? LIFE_SCENES.some(s=>s.id===q.id&&s.npc===q.npc&&!q.other&&r.lives[q.npc].milestones.length>s.index) : q.id.startsWith('encore-') ? ENCORE_SCENES.some(s=>s.id===q.id&&s.npc===q.npc&&s.other===q.other&&r.encore.route===s.theme) : q.id.startsWith('circle-') ? CIRCLE_SCENES.some(s=>s.id===q.id && s.npc===q.npc && s.other===q.other) : SEPARATION_IDS.includes(q.id) ? separationMatches(r,q) : ['breakup','npc-breakup','npc-departure'].includes(q.id) ? false : q.id.startsWith('photo-') ? photoReady(r,q) : q.id==='initiative' ? !!INITIATIVE[q.npc] && [0,1].includes(q.index) : ['conversation','date'].includes(q.id) ? [0,1].includes(q.index) : q.id.startsWith('daily-') ? DAILY.some(s=>s.id===q.id && s.npc===q.npc && !q.other) : q.id==='introduction' ? !!r.relationships[q.npc]?.met : q.id==='together' ? !!q.other : q.id.startsWith('npc-') && q.id!=='npc-departure' ? NPC_ROUTES.some(x=>x.cast[0]===q.npc && x.cast[1]===q.other) && (['npc-confession','npc-prelude'].includes(q.id) || !!r.npcBonds[pairKey(q.npc,q.other)]) : true;
+    const validCast=q=>q.id.startsWith('turn-') ? TURN_SCENES.some(s=>s.id===q.id&&THEMES.some(t=>t.id===s.theme&&t.cast[0]===q.npc&&t.cast[1]===q.other)) : q.id.startsWith('after-') ? WORLD_FOLLOWUPS.some(s=>s.id===q.id&&s.npc===(q.npc||null)&&!q.other) : q.id.startsWith('finale-') ? FINALES.some(s=>s.id===q.id&&s.npc===q.npc&&!q.other) : q.id==='life-change' ? Number.isInteger(q.change)&&q.change>=0&&!!r.lives[q.npc]?.plan.events[q.change]&&!q.other : APPOINTMENT_IDS.includes(q.id) ? appointmentReady(r,q) : q.id.startsWith('life-') ? LIFE_SCENES.some(s=>s.id===q.id&&s.npc===q.npc&&!q.other&&r.lives[q.npc].milestones.length>s.index) : q.id.startsWith('encore-') ? ENCORE_SCENES.some(s=>s.id===q.id&&s.npc===q.npc&&s.other===q.other&&r.encore.route===s.theme) : q.id.startsWith('circle-') ? CIRCLE_SCENES.some(s=>s.id===q.id && s.npc===q.npc && s.other===q.other) : SEPARATION_IDS.includes(q.id) ? separationMatches(r,q) : ['breakup','npc-breakup','npc-departure'].includes(q.id) ? false : q.id.startsWith('photo-') ? photoReady(r,q) : q.id==='initiative' ? !!INITIATIVE[q.npc] && [0,1].includes(q.index) : ['conversation','date'].includes(q.id) ? [0,1].includes(q.index) : q.id.startsWith('daily-') ? DAILY.some(s=>s.id===q.id && s.npc===q.npc && !q.other) : q.id==='introduction' ? !!r.relationships[q.npc]?.met : q.id==='together' ? !!q.other : q.id.startsWith('npc-') && q.id!=='npc-departure' ? NPC_ROUTES.some(x=>x.cast[0]===q.npc && x.cast[1]===q.other) && (['npc-confession','npc-prelude'].includes(q.id) || !!r.npcBonds[pairKey(q.npc,q.other)]) : true;
     const validStory=q=>q && (q.dueDay===undefined || (Number.isInteger(q.dueDay) && finite(q.dueDay,1,DAYS+4))) && (q.type==='scene' ? validScene(q) && validCast(q) : q.type==='arc' ? !!byId(PEOPLE,q.npc) && Number.isInteger(q.index) && finite(q.index,0,1) && !!ARCS[q.npc]?.[q.index] : q.type==='event' && !!byId(EVENTS,q.id));
     const validPrelude=q=>!['courtship','npc-prelude'].includes(q?.id) || (q.type==='scene' && [0,1].includes(q.index) && (!q.narrator || (q.id==='npc-prelude' && q.narrator===narratorFor(q.npc,q.other) && isIntroduced(r,q.narrator))));
     if (!Array.isArray(r.queue) || r.queue.length>128 || !r.queue.every(q=>validStory(q) && validPrelude(q))) error();
